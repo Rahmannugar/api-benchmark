@@ -3,37 +3,51 @@ package internal
 import (
 	"time"
 )
-type Summary struct {
-	TotalRequests int
-	SuccessfulRequests int
-	FailedRequests int
-	TotalDuration time.Duration
-	RequestPerSec float64
-	MinLatency time.Duration
-	MaxLatency time.Duration
-	AvgLatency time.Duration
 
+type Summary struct {
+	TotalRequests      int
+	SuccessfulRequests int
+	FailedRequests     int
+	TotalDuration      time.Duration
+	RequestPerSec      float64
+	MinLatency         time.Duration
+	MaxLatency         time.Duration
+	AvgLatency         time.Duration
+	StatusCodes        map[int]int
+	Errors             map[string]int
 }
+
 // CalculateStats processes the list of results and computes performance metrics
-func CalculateStats(results []Result, totalDuration time.Duration) Summary{
+func CalculateStats(results []Result, totalDuration time.Duration) Summary {
 	summary := Summary{
 		TotalRequests: len(results),
 		TotalDuration: totalDuration,
-		
+		StatusCodes:   make(map[int]int),
+		Errors:        make(map[string]int),
 	}
-	if len(results)==0{
+	if len(results) == 0 {
 		return summary
 	}
-	
-	var totalLatency time.Duration
-	summary.MinLatency=results[0].Duration
-	summary.MaxLatency=results[0].Duration
 
-	for _,res:=range results {
+	var totalLatency time.Duration
+	summary.MinLatency = results[0].Duration
+	summary.MaxLatency = results[0].Duration
+
+	for _, res := range results {
+		// Track status codes
+		if res.StatusCode > 0 {
+			summary.StatusCodes[res.StatusCode]++
+		}
+
+		// Track network / client errors
+		if res.Error != nil {
+			summary.Errors[res.Error.Error()]++
+		}
+
 		// Count successful vs failed requests based on errors or HTTP status codes
 		if res.Error != nil || res.StatusCode >= 400 {
 			summary.FailedRequests++
-		}else {
+		} else {
 			summary.SuccessfulRequests++
 		}
 

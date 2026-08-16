@@ -1,38 +1,84 @@
 package internal
-import(
+
+import (
+	"bytes"
+	"io"
 	"net/http"
 	"time"
 )
-// Result holds the metrics for a single HTTP request execution
-type Result struct{
-	Duration time.Duration
-	Error error
-	StatusCode int 
+
+// RequestConfig holds the parameters for executing HTTP requests
+type RequestConfig struct {
+	Method  string
+	URL     string
+	Headers map[string]string
+	Body    []byte
+	Timeout time.Duration
 }
-// SendRequest executes a single HTTP GET request and measures its duration 
-func SendRequest(url string) Result{
-	start := time.Now()
 
-	// send the HTTp GET request to the target URL
-	resp, err:=http.Get(url)
-	duration := time.Since(start)
+// Result holds the metrics for a single HTTP request execution
+type Result struct {
+	Duration   time.Duration
+	Error      error
+	StatusCode int
+}
 
-	if err !=nil{
+// NewHTTPClient creates an optimized HTTP client with connection pooling scaled for concurrency
+func NewHTTPClient(concurrency int, timeout time.Duration) *http.Client {
+	transport := &http.Transport{
+		MaxIdleConns:        concurrency * 2,
+		MaxIdleConnsPerHost: concurrency * 2,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 10 * time.Second,
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   timeout,
+	}
+}
+
+// SendRequest executes a single HTTP request with the provided configuration and measures its duration
+func SendRequest(client *http.Client, config *RequestConfig) Result {
+	var bodyReader io.Reader
+	if len(config.Body) > 0 {
+		bodyReader = bytes.NewReader(config.Body)
+	}
+
+	req, err := http.NewRequest(config.Method, config.URL, bodyReader)
+	if err != nil {
 		return Result{
-			Duration: duration,
-			Error: err,
-			StatusCode:0,
+			Duration:   0,
+			Error:      err,
+			StatusCode: 0,
 		}
 	}
 
-	defer resp.Body.Close()
+	// Set headers
+	for key, value := range config.Headers {
+		req.Header.Set(key, value)
+	}
 
-	// Retuen the performance and status metrics
+	start := time.Now()
+	resp, err := client.Do(req)
+	duration := time.Since(start)
+
+	if err != nil {
+		return Result{
+			Duration:   duration,
+			Error:      err,
+			StatusCode: 0,
+		}
+	}
+
+	// Discard and close the response body to allow connection reuse
+	_, _ = io.Copy(io.Discard, resp.Body)
+	_ = resp.Body.Close()
+
 	return Result{
-		Duration: duration,
-		Error: nil,
+		Duration:   duration,
+		Error:      nil,
 		StatusCode: resp.StatusCode,
 	}
-	
 }
 

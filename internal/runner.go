@@ -4,37 +4,56 @@ import (
 	"sync"
 )
 
-// RunBenchmark executes totalRequests concurrently using specified number of workers
-func RunBenchmark(url string, totalRequests, concurrency int)[]Result{
-	// Creare a buffered channel to collect results safely
-	results := make(chan Result, totalRequests)
+// BenchmarkConfig holds the full setup for running a benchmark
+type BenchmarkConfig struct {
+	Request       RequestConfig
+	TotalRequests int
+	Concurrency   int
+}
+
+// RunBenchmark executes totalRequests concurrently using the specified number of workers
+func RunBenchmark(cfg BenchmarkConfig) []Result {
+	if cfg.Concurrency <= 0 {
+		cfg.Concurrency = 1
+	}
+	if cfg.TotalRequests <= 0 {
+		return nil
+	}
+
+	client := NewHTTPClient(cfg.Concurrency, cfg.Request.Timeout)
+
+	jobs := make(chan struct{}, cfg.TotalRequests)
+	results := make(chan Result, cfg.TotalRequests)
+
+	// Feed all jobs into the channel
+	for i := 0; i < cfg.TotalRequests; i++ {
+		jobs <- struct{}{}
+	}
+	close(jobs)
+
 	var wg sync.WaitGroup
 
-	// Calculate how many requests each worker should handle
-	requestsPerWorker := totalRequests / concurrency
-
 	// Spawn worker goroutines
-	for i:=0;i <concurrency;i++{
+	for i := 0; i < cfg.Concurrency; i++ {
 		wg.Add(1)
-		go func(){
+		go func() {
 			defer wg.Done()
-			for j:=0;j < requestsPerWorker;j++{
-				res:= SendRequest(url)
-				results <-res
-			}	
-	}()
-
+			for range jobs {
+				res := SendRequest(client, &cfg.Request)
+				results <- res
+			}
+		}()
 	}
+
 	wg.Wait()
 	close(results)
-	
+
 	// Collect all results from the channel into a slice
-	var allResults []Result
+	allResults := make([]Result, 0, cfg.TotalRequests)
 	for res := range results {
 		allResults = append(allResults, res)
 	}
-	
-	return allResults
 
+	return allResults
 }
 	
