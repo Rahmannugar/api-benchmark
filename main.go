@@ -1,10 +1,10 @@
 package main
 
 import (
-    "fmt"
+	"github.com/mbrik/CLI-Benchmarking-Tool/cmd"
 )
 
 func main() {
-    fmt.Println("🚀 Initializing Go Benchmarking CLI Tool...")
-   
+	// Execute the CLI command handler
+	cmd.Execute()
 }
