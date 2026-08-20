@@ -9,13 +9,6 @@ import (
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
 )
 
-// Result holds the metrics for a single HTTP request execution
-type Result struct {
-	Duration   time.Duration
-	Error      error
-	StatusCode int
-}
-
 // NewHTTPClient creates an optimized HTTP client with connection pooling scaled for concurrency
 func NewHTTPClient(concurrency int, timeout time.Duration) *http.Client {
 	transport := &http.Transport{
