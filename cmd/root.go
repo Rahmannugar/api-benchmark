@@ -80,12 +80,7 @@ func Execute() error {
 
 	printBenchmarkConfiguration(benchConfig)
 
-	startTime := time.Now()
-	results := internal.RunBenchmark(benchConfig)
-	totalDuration := time.Since(startTime)
-
-	// Calculate and print the performance summary
-	summary := internal.CalculateStats(results, totalDuration)
+	summary := internal.RunBenchmark(benchConfig)
 	printSummary(summary)
 
 	return nil

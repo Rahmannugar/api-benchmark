@@ -2,17 +2,19 @@ package internal
 
 import (
 	"sync"
+	"time"
 
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
 )
 
-// RunBenchmark executes the configured requests using a bounded worker pool.
-func RunBenchmark(cfg config.BenchmarkConfig) []RequestResult {
+// RunBenchmark executes the configured requests and returns their aggregate metrics.
+func RunBenchmark(cfg config.BenchmarkConfig) Summary {
+	startTime := time.Now()
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = 1
 	}
 	if cfg.TotalRequests <= 0 {
-		return nil
+		return newStatsAccumulator(0).finalize(time.Since(startTime))
 	}
 
 	workerCount := min(cfg.Concurrency, cfg.TotalRequests)
@@ -48,11 +50,11 @@ func RunBenchmark(cfg config.BenchmarkConfig) []RequestResult {
 		close(results)
 	}()
 
-	// Drain results while workers run to keep the bounded results channel moving.
-	allResults := make([]RequestResult, 0, cfg.TotalRequests)
-	for res := range results {
-		allResults = append(allResults, res)
+	// Aggregate each result immediately instead of retaining every full result.
+	stats := newStatsAccumulator(workerCount)
+	for result := range results {
+		stats.add(result)
 	}
 
-	return allResults
+	return stats.finalize(time.Since(startTime))
 }

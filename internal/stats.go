@@ -6,46 +6,59 @@ import (
 	"time"
 )
 
-// CalculateStats processes the list of results and computes performance metrics
-func CalculateStats(results []RequestResult, elapsedTime time.Duration) Summary {
-	summary := Summary{
-		AttemptedRequests: len(results),
-		ElapsedTime:       elapsedTime,
-		StatusCodes:       make(map[int]int),
-		Errors:            make(map[string]int),
+type statsAccumulator struct {
+	summary             Summary
+	successfulDurations []time.Duration
+}
+
+func newStatsAccumulator(initialCapacity int) *statsAccumulator {
+	return &statsAccumulator{
+		summary: Summary{
+			StatusCodes: make(map[int]int),
+			Errors:      make(map[string]int),
+		},
+		successfulDurations: make([]time.Duration, 0, initialCapacity),
 	}
-	if len(results) == 0 {
-		return summary
+}
+
+func (a *statsAccumulator) add(result RequestResult) {
+	a.summary.AttemptedRequests++
+
+	if result.StatusCode > 0 {
+		a.summary.StatusCodes[result.StatusCode]++
 	}
-
-	successfulDurations := make([]time.Duration, 0, len(results))
-
-	for _, res := range results {
-		if res.StatusCode > 0 {
-			summary.StatusCodes[res.StatusCode]++
-		}
-
-		if res.Error != nil {
-			summary.Errors[res.Error.Error()]++
-		}
-
-		if !isSuccessfulResult(res) {
-			summary.FailedRequests++
-			continue
-		}
-
-		summary.SuccessfulRequests++
-		successfulDurations = append(successfulDurations, res.Duration)
+	if result.Error != nil {
+		a.summary.Errors[result.Error.Error()]++
+	}
+	if !isSuccessfulResult(result) {
+		a.summary.FailedRequests++
+		return
 	}
 
-	summary.SuccessfulLatency = calculateLatencyStats(successfulDurations)
+	a.summary.SuccessfulRequests++
+	a.successfulDurations = append(a.successfulDurations, result.Duration)
+}
+
+func (a *statsAccumulator) finalize(elapsedTime time.Duration) Summary {
+	a.summary.ElapsedTime = elapsedTime
+	a.summary.SuccessfulLatency = calculateLatencyStats(a.successfulDurations)
 
 	if elapsedTime.Seconds() > 0 {
-		summary.EstimatedThroughput = float64(summary.AttemptedRequests) / elapsedTime.Seconds()
-		summary.SuccessfulThroughput = float64(summary.SuccessfulRequests) / elapsedTime.Seconds()
+		a.summary.EstimatedThroughput = float64(a.summary.AttemptedRequests) / elapsedTime.Seconds()
+		a.summary.SuccessfulThroughput = float64(a.summary.SuccessfulRequests) / elapsedTime.Seconds()
 	}
 
-	return summary
+	return a.summary
+}
+
+// CalculateStats processes collected results and computes performance metrics.
+func CalculateStats(results []RequestResult, elapsedTime time.Duration) Summary {
+	stats := newStatsAccumulator(len(results))
+	for _, result := range results {
+		stats.add(result)
+	}
+
+	return stats.finalize(elapsedTime)
 }
 
 func isSuccessfulResult(result RequestResult) bool {

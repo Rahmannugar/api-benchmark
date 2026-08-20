@@ -80,10 +80,7 @@ func TestRunBenchmark(t *testing.T) {
 		Concurrency:   10,
 	}
 
-	results := internal.RunBenchmark(benchCfg)
-	if len(results) != 105 {
-		t.Fatalf("expected 105 results, got %d", len(results))
-	}
+	summary := internal.RunBenchmark(benchCfg)
 	if requestCount.Load() != 105 {
 		t.Fatalf("expected server to receive 105 requests, got %d", requestCount.Load())
 	}
@@ -95,7 +92,9 @@ func TestRunBenchmark(t *testing.T) {
 		)
 	}
 
-	summary := internal.CalculateStats(results, 100*time.Millisecond)
+	if summary.AttemptedRequests != 105 {
+		t.Fatalf("expected 105 attempted requests, got %d", summary.AttemptedRequests)
+	}
 	if summary.SuccessfulRequests != 105 {
 		t.Fatalf("expected 105 successful requests, got %d", summary.SuccessfulRequests)
 	}
@@ -104,5 +103,14 @@ func TestRunBenchmark(t *testing.T) {
 	}
 	if summary.StatusCodes[http.StatusOK] != 105 {
 		t.Fatalf("expected 105 HTTP 200 responses, got %d", summary.StatusCodes[http.StatusOK])
+	}
+	if summary.ElapsedTime <= 0 {
+		t.Fatalf("expected positive elapsed time, got %v", summary.ElapsedTime)
+	}
+	if summary.SuccessfulLatency.Average <= 0 {
+		t.Fatalf("expected positive average latency, got %v", summary.SuccessfulLatency.Average)
+	}
+	if summary.EstimatedThroughput <= 0 || summary.SuccessfulThroughput <= 0 {
+		t.Fatalf("expected positive throughput metrics, got %+v", summary)
 	}
 }
