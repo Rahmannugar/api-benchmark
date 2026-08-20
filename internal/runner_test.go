@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
 )
 
 func TestSendRequestCustomMethodAndHeaders(t *testing.T) {
@@ -29,7 +30,7 @@ func TestSendRequestCustomMethodAndHeaders(t *testing.T) {
 	defer server.Close()
 
 	client := internal.NewHTTPClient(5, 5*time.Second)
-	reqCfg := internal.RequestConfig{
+	reqCfg := config.RequestConfig{
 		Method: "POST",
 		URL:    server.URL,
 		Headers: map[string]string{
@@ -56,8 +57,8 @@ func TestRunBenchmark(t *testing.T) {
 	}))
 	defer server.Close()
 
-	benchCfg := internal.BenchmarkConfig{
-		Request: internal.RequestConfig{
+	benchCfg := config.BenchmarkConfig{
+		Request: config.RequestConfig{
 			Method:  "GET",
 			URL:     server.URL,
 			Timeout: 5 * time.Second,

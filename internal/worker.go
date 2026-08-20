@@ -5,16 +5,9 @@ import (
 	"io"
 	"net/http"
 	"time"
-)
 
-// RequestConfig holds the parameters for executing HTTP requests
-type RequestConfig struct {
-	Method  string
-	URL     string
-	Headers map[string]string
-	Body    []byte
-	Timeout time.Duration
-}
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
+)
 
 // Result holds the metrics for a single HTTP request execution
 type Result struct {
@@ -39,13 +32,13 @@ func NewHTTPClient(concurrency int, timeout time.Duration) *http.Client {
 }
 
 // SendRequest executes a single HTTP request with the provided configuration and measures its duration
-func SendRequest(client *http.Client, config *RequestConfig) Result {
+func SendRequest(client *http.Client, requestConfig *config.RequestConfig) Result {
 	var bodyReader io.Reader
-	if len(config.Body) > 0 {
-		bodyReader = bytes.NewReader(config.Body)
+	if len(requestConfig.Body) > 0 {
+		bodyReader = bytes.NewReader(requestConfig.Body)
 	}
 
-	req, err := http.NewRequest(config.Method, config.URL, bodyReader)
+	req, err := http.NewRequest(requestConfig.Method, requestConfig.URL, bodyReader)
 	if err != nil {
 		return Result{
 			Duration:   0,
@@ -55,7 +48,7 @@ func SendRequest(client *http.Client, config *RequestConfig) Result {
 	}
 
 	// Set headers
-	for key, value := range config.Headers {
+	for key, value := range requestConfig.Headers {
 		req.Header.Set(key, value)
 	}
 
@@ -81,4 +74,3 @@ func SendRequest(client *http.Client, config *RequestConfig) Result {
 		StatusCode: resp.StatusCode,
 	}
 }
-

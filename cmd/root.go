@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
 )
 
 // headerFlags is a custom flag type to allow multiple -H / -header arguments
@@ -24,7 +25,7 @@ func (h *headerFlags) Set(value string) error {
 }
 
 // Execute parses CLI flags and runs the benchmark process
-func Execute() {
+func Execute() error {
 	// Define command-line flags
 	urlFlag := flag.String("url", "http://localhost:8080", "Target URL to benchmark")
 	methodFlag := flag.String("m", "GET", "HTTP method (GET, POST, PUT, DELETE, PATCH, etc.)")
@@ -62,6 +63,23 @@ func Execute() {
 		}
 	}
 
+	reqConfig := config.RequestConfig{
+		Method:  method,
+		URL:     *urlFlag,
+		Headers: headerMap,
+		Body:    []byte(*dataFlag),
+		Timeout: *timeoutFlag,
+	}
+
+	benchConfig := config.BenchmarkConfig{
+		Request:       reqConfig,
+		TotalRequests: *requestsFlag,
+		Concurrency:   *concurrencyFlag,
+	}
+	if err := benchConfig.Validate(); err != nil {
+		return fmt.Errorf("invalid benchmark configuration: %w", err)
+	}
+
 	fmt.Printf("🎯 Benchmarking Target: [%s] %s\n", method, *urlFlag)
 	fmt.Printf("📦 Total Requests: %d | Concurrency: %d | Timeout: %v\n", *requestsFlag, *concurrencyFlag, *timeoutFlag)
 	if len(headerMap) > 0 {
@@ -75,20 +93,6 @@ func Execute() {
 	}
 	fmt.Println("⏳ Running benchmark, please wait...")
 
-	reqConfig := internal.RequestConfig{
-		Method:  method,
-		URL:     *urlFlag,
-		Headers: headerMap,
-		Body:    []byte(*dataFlag),
-		Timeout: *timeoutFlag,
-	}
-
-	benchConfig := internal.BenchmarkConfig{
-		Request:       reqConfig,
-		TotalRequests: *requestsFlag,
-		Concurrency:   *concurrencyFlag,
-	}
-
 	startTime := time.Now()
 	results := internal.RunBenchmark(benchConfig)
 	totalDuration := time.Since(startTime)
@@ -96,6 +100,8 @@ func Execute() {
 	// Calculate and print the performance summary
 	summary := internal.CalculateStats(results, totalDuration)
 	printSummary(summary)
+
+	return nil
 }
 
 // printSummary formats and displays the final benchmark metrics

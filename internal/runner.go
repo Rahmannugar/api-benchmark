@@ -2,17 +2,12 @@ package internal
 
 import (
 	"sync"
+
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
 )
 
-// BenchmarkConfig holds the full setup for running a benchmark
-type BenchmarkConfig struct {
-	Request       RequestConfig
-	TotalRequests int
-	Concurrency   int
-}
-
 // RunBenchmark executes totalRequests concurrently using the specified number of workers
-func RunBenchmark(cfg BenchmarkConfig) []Result {
+func RunBenchmark(cfg config.BenchmarkConfig) []Result {
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = 1
 	}
@@ -56,4 +51,3 @@ func RunBenchmark(cfg BenchmarkConfig) []Result {
 
 	return allResults
 }
-	
