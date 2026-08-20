@@ -50,9 +50,22 @@ func TestSendRequestCustomMethodAndHeaders(t *testing.T) {
 }
 
 func TestRunBenchmark(t *testing.T) {
-	var requestCount int64
+	var requestCount atomic.Int64
+	var activeRequests atomic.Int64
+	var maximumActiveRequests atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt64(&requestCount, 1)
+		requestCount.Add(1)
+		active := activeRequests.Add(1)
+		defer activeRequests.Add(-1)
+
+		for {
+			maximum := maximumActiveRequests.Load()
+			if active <= maximum || maximumActiveRequests.CompareAndSwap(maximum, active) {
+				break
+			}
+		}
+
+		time.Sleep(5 * time.Millisecond)
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -71,8 +84,15 @@ func TestRunBenchmark(t *testing.T) {
 	if len(results) != 105 {
 		t.Fatalf("expected 105 results, got %d", len(results))
 	}
-	if atomic.LoadInt64(&requestCount) != 105 {
-		t.Fatalf("expected server to receive 105 requests, got %d", requestCount)
+	if requestCount.Load() != 105 {
+		t.Fatalf("expected server to receive 105 requests, got %d", requestCount.Load())
+	}
+	if maximumActiveRequests.Load() > int64(benchCfg.Concurrency) {
+		t.Fatalf(
+			"expected no more than %d concurrent requests, got %d",
+			benchCfg.Concurrency,
+			maximumActiveRequests.Load(),
+		)
 	}
 
 	summary := internal.CalculateStats(results, 100*time.Millisecond)

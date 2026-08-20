@@ -6,7 +6,7 @@ import (
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
 )
 
-// RunBenchmark executes totalRequests concurrently using the specified number of workers
+// RunBenchmark executes the configured requests using a bounded worker pool.
 func RunBenchmark(cfg config.BenchmarkConfig) []RequestResult {
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = 1
@@ -15,35 +15,40 @@ func RunBenchmark(cfg config.BenchmarkConfig) []RequestResult {
 		return nil
 	}
 
-	client := NewHTTPClient(cfg.Concurrency, cfg.Request.Timeout)
+	workerCount := min(cfg.Concurrency, cfg.TotalRequests)
+	client := NewHTTPClient(workerCount, cfg.Request.Timeout)
 
-	jobs := make(chan struct{}, cfg.TotalRequests)
-	results := make(chan RequestResult, cfg.TotalRequests)
-
-	// Feed all jobs into the channel
-	for i := 0; i < cfg.TotalRequests; i++ {
-		jobs <- struct{}{}
-	}
-	close(jobs)
+	// Bound channel memory by worker count rather than total request count.
+	jobs := make(chan struct{}, workerCount)
+	results := make(chan RequestResult, workerCount)
 
 	var wg sync.WaitGroup
-
-	// Spawn worker goroutines
-	for i := 0; i < cfg.Concurrency; i++ {
-		wg.Add(1)
+	wg.Add(workerCount)
+	// Each worker processes one request at a time and then takes the next job.
+	for range workerCount {
 		go func() {
 			defer wg.Done()
 			for range jobs {
-				res := SendRequest(client, &cfg.Request)
-				results <- res
+				results <- SendRequest(client, &cfg.Request)
 			}
 		}()
 	}
 
-	wg.Wait()
-	close(results)
+	// Produce jobs independently so workers can begin before every job is queued.
+	go func() {
+		defer close(jobs)
+		for range cfg.TotalRequests {
+			jobs <- struct{}{}
+		}
+	}()
 
-	// Collect all results from the channel into a slice
+	// Results are complete only after every worker has stopped sending.
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Drain results while workers run to keep the bounded results channel moving.
 	allResults := make([]RequestResult, 0, cfg.TotalRequests)
 	for res := range results {
 		allResults = append(allResults, res)
