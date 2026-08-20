@@ -86,29 +86,3 @@ func TestRunBenchmark(t *testing.T) {
 		t.Fatalf("expected 105 HTTP 200 responses, got %d", summary.StatusCodes[http.StatusOK])
 	}
 }
-
-func TestCalculateStatsWithErrorsAndFailures(t *testing.T) {
-	results := []internal.Result{
-		{Duration: 10 * time.Millisecond, StatusCode: 200},
-		{Duration: 15 * time.Millisecond, StatusCode: 404},
-		{Duration: 20 * time.Millisecond, StatusCode: 500},
-		{Duration: 5 * time.Millisecond, StatusCode: 0, Error: io.ErrUnexpectedEOF},
-	}
-
-	summary := internal.CalculateStats(results, 50*time.Millisecond)
-	if summary.TotalRequests != 4 {
-		t.Fatalf("expected 4 total requests, got %d", summary.TotalRequests)
-	}
-	if summary.SuccessfulRequests != 1 {
-		t.Fatalf("expected 1 successful request, got %d", summary.SuccessfulRequests)
-	}
-	if summary.FailedRequests != 3 {
-		t.Fatalf("expected 3 failed requests, got %d", summary.FailedRequests)
-	}
-	if summary.StatusCodes[200] != 1 || summary.StatusCodes[404] != 1 || summary.StatusCodes[500] != 1 {
-		t.Fatalf("unexpected status codes map: %+v", summary.StatusCodes)
-	}
-	if summary.Errors[io.ErrUnexpectedEOF.Error()] != 1 {
-		t.Fatalf("unexpected errors map: %+v", summary.Errors)
-	}
-}

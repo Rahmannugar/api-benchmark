@@ -78,18 +78,7 @@ func Execute() error {
 		return fmt.Errorf("invalid benchmark configuration: %w", err)
 	}
 
-	fmt.Printf("🎯 Benchmarking Target: [%s] %s\n", method, *urlFlag)
-	fmt.Printf("📦 Total Requests: %d | Concurrency: %d | Timeout: %v\n", *requestsFlag, *concurrencyFlag, *timeoutFlag)
-	if len(headerMap) > 0 {
-		fmt.Println("📋 Custom Headers:")
-		for k, v := range headerMap {
-			fmt.Printf("   - %s: %s\n", k, v)
-		}
-	}
-	if len(*dataFlag) > 0 {
-		fmt.Printf("📝 Request Body Size: %d bytes\n", len(*dataFlag))
-	}
-	fmt.Println("⏳ Running benchmark, please wait...")
+	printBenchmarkConfiguration(benchConfig)
 
 	startTime := time.Now()
 	results := internal.RunBenchmark(benchConfig)

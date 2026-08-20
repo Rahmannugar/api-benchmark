@@ -7,7 +7,7 @@ import (
 )
 
 // RunBenchmark executes totalRequests concurrently using the specified number of workers
-func RunBenchmark(cfg config.BenchmarkConfig) []Result {
+func RunBenchmark(cfg config.BenchmarkConfig) []RequestResult {
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = 1
 	}
@@ -18,7 +18,7 @@ func RunBenchmark(cfg config.BenchmarkConfig) []Result {
 	client := NewHTTPClient(cfg.Concurrency, cfg.Request.Timeout)
 
 	jobs := make(chan struct{}, cfg.TotalRequests)
-	results := make(chan Result, cfg.TotalRequests)
+	results := make(chan RequestResult, cfg.TotalRequests)
 
 	// Feed all jobs into the channel
 	for i := 0; i < cfg.TotalRequests; i++ {
@@ -44,7 +44,7 @@ func RunBenchmark(cfg config.BenchmarkConfig) []Result {
 	close(results)
 
 	// Collect all results from the channel into a slice
-	allResults := make([]Result, 0, cfg.TotalRequests)
+	allResults := make([]RequestResult, 0, cfg.TotalRequests)
 	for res := range results {
 		allResults = append(allResults, res)
 	}
