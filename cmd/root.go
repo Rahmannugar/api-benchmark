@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -32,6 +33,7 @@ func Execute(ctx context.Context) error {
 
 	requestsFlag := flag.Int("n", 1000, "Total number of requests to perform")
 	concurrencyFlag := flag.Int("c", 10, "Number of concurrent workers")
+	formatFlag := flag.String("format", "text", "Output format: text or json")
 
 	dataFlag := flag.String("d", "", "HTTP request body / data")
 	flag.StringVar(dataFlag, "data", "", "HTTP request body / data (alias for -d)")
@@ -47,6 +49,11 @@ func Execute(ctx context.Context) error {
 	flag.Parse()
 
 	method := strings.ToUpper(strings.TrimSpace(*methodFlag))
+	outputFormat := strings.ToLower(strings.TrimSpace(*formatFlag))
+	if outputFormat != "text" && outputFormat != "json" {
+		return fmt.Errorf("invalid output format %q: expected text or json", *formatFlag)
+	}
+
 	headerMap, err := config.ParseHeaders([]string(headers))
 	if err != nil {
 		return err
@@ -69,10 +76,18 @@ func Execute(ctx context.Context) error {
 		return fmt.Errorf("invalid benchmark configuration: %w", err)
 	}
 
-	printBenchmarkConfiguration(benchConfig)
+	if outputFormat == "text" {
+		printBenchmarkConfiguration(benchConfig)
+	}
 
 	summary := internal.RunBenchmark(ctx, benchConfig)
-	printSummary(summary)
+	if outputFormat == "json" {
+		if err := writeJSONReport(os.Stdout, benchConfig, summary); err != nil {
+			return fmt.Errorf("write JSON report: %w", err)
+		}
+	} else {
+		printSummary(summary)
+	}
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("benchmark interrupted: %w", err)
 	}

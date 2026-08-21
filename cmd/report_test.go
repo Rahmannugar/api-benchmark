@@ -1,6 +1,16 @@
 package cmd
 
-import "testing"
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
+)
 
 func TestDisplayHeaderValueRedactsCredentials(t *testing.T) {
 	tests := []struct {
@@ -21,5 +31,69 @@ func TestDisplayHeaderValueRedactsCredentials(t *testing.T) {
 				t.Fatalf("expected %q, got %q", tt.want, got)
 			}
 		})
+	}
+}
+
+func TestWriteJSONReport(t *testing.T) {
+	cfg := config.BenchmarkConfig{
+		Request: config.RequestConfig{
+			Method: http.MethodPost,
+			URL:    "https://example.com/api/items",
+			Headers: map[string]string{
+				"Authorization": "Bearer private-token",
+				"Content-Type":  "application/json",
+			},
+			Body:    []byte(`{"name":"item"}`),
+			Timeout: 1500 * time.Millisecond,
+		},
+		TotalRequests: 100,
+		Concurrency:   10,
+	}
+	summary := internal.Summary{
+		AttemptedRequests:    100,
+		SuccessfulRequests:   90,
+		FailedRequests:       10,
+		ElapsedTime:          2 * time.Second,
+		EstimatedThroughput:  50,
+		SuccessfulThroughput: 45,
+		SuccessfulLatency: internal.LatencyStats{
+			Average: 25 * time.Millisecond,
+			Minimum: 10 * time.Millisecond,
+			Maximum: 80 * time.Millisecond,
+			P50:     20 * time.Millisecond,
+			P90:     40 * time.Millisecond,
+			P95:     50 * time.Millisecond,
+			P99:     70 * time.Millisecond,
+		},
+		StatusCodes: map[int]int{200: 90, 429: 10},
+		Errors:      map[string]int{},
+	}
+
+	var output bytes.Buffer
+	if err := writeJSONReport(&output, cfg, summary); err != nil {
+		t.Fatalf("expected JSON report, got %v", err)
+	}
+	if strings.Contains(output.String(), "private-token") {
+		t.Fatal("expected authorization token to be redacted")
+	}
+
+	var report jsonReport
+	if err := json.Unmarshal(output.Bytes(), &report); err != nil {
+		t.Fatalf("expected valid JSON, got %v", err)
+	}
+	if report.Target.Method != http.MethodPost || report.Target.URL != cfg.Request.URL {
+		t.Fatalf("unexpected target: %+v", report.Target)
+	}
+	if report.Configuration.TimeoutSeconds != 1.5 {
+		t.Fatalf("expected 1.5 timeout seconds, got %f", report.Configuration.TimeoutSeconds)
+	}
+	if report.Configuration.Headers["Authorization"] != "[REDACTED]" {
+		t.Fatalf("expected redacted headers, got %+v", report.Configuration.Headers)
+	}
+	if report.Summary.SuccessfulLatencyMS.P99 != 70 {
+		t.Fatalf("expected 70ms P99, got %f", report.Summary.SuccessfulLatencyMS.P99)
+	}
+	if report.Summary.Throughput.SuccessfulRequestsPerSecond != 45 {
+		t.Fatalf("expected 45 successful requests per second, got %f", report.Summary.Throughput.SuccessfulRequestsPerSecond)
 	}
 }
