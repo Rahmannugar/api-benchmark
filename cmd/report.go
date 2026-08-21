@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"slices"
+	"strings"
 
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal"
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
@@ -19,8 +20,13 @@ func printBenchmarkConfiguration(cfg config.BenchmarkConfig) {
 	)
 	if len(cfg.Request.Headers) > 0 {
 		fmt.Println("Custom Headers:")
-		for key, value := range cfg.Request.Headers {
-			fmt.Printf("   - %s: %s\n", key, value)
+		keys := make([]string, 0, len(cfg.Request.Headers))
+		for key := range cfg.Request.Headers {
+			keys = append(keys, key)
+		}
+		slices.Sort(keys)
+		for _, key := range keys {
+			fmt.Printf("   - %s: %s\n", key, displayHeaderValue(key, cfg.Request.Headers[key]))
 		}
 	}
 	if len(cfg.Request.Body) > 0 {
@@ -75,9 +81,30 @@ func printSummary(s internal.Summary) {
 	if len(s.Errors) > 0 {
 		fmt.Println("----------------------------------")
 		fmt.Println("ERROR BREAKDOWN")
-		for errMsg, count := range s.Errors {
+		errorMessages := make([]string, 0, len(s.Errors))
+		for errMsg := range s.Errors {
+			errorMessages = append(errorMessages, errMsg)
+		}
+		slices.Sort(errorMessages)
+		for _, errMsg := range errorMessages {
+			count := s.Errors[errMsg]
 			fmt.Printf("   - %s: %d occurrences\n", errMsg, count)
 		}
 	}
 	fmt.Println("==================================")
+}
+
+func displayHeaderValue(name, value string) string {
+	normalizedName := strings.ToLower(name)
+	if normalizedName == "authorization" ||
+		normalizedName == "proxy-authorization" ||
+		normalizedName == "cookie" ||
+		normalizedName == "set-cookie" ||
+		strings.Contains(normalizedName, "api-key") ||
+		strings.Contains(normalizedName, "token") ||
+		strings.Contains(normalizedName, "secret") {
+		return "[REDACTED]"
+	}
+
+	return value
 }

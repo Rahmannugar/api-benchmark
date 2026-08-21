@@ -46,19 +46,9 @@ func Execute() error {
 	flag.Parse()
 
 	method := strings.ToUpper(strings.TrimSpace(*methodFlag))
-	if method == "" {
-		method = "GET"
-	}
-
-	// Parse headers into map
-	headerMap := make(map[string]string)
-	for _, h := range headers {
-		parts := strings.SplitN(h, ":", 2)
-		if len(parts) == 2 {
-			headerMap[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-		} else {
-			headerMap[strings.TrimSpace(parts[0])] = ""
-		}
+	headerMap, err := config.ParseHeaders([]string(headers))
+	if err != nil {
+		return err
 	}
 
 	reqConfig := config.RequestConfig{

@@ -8,6 +8,47 @@ import (
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
 )
 
+func TestParseHeaders(t *testing.T) {
+	headers, err := config.ParseHeaders([]string{
+		"Content-Type: application/json",
+		"Authorization: Bearer token:with:colons",
+		"X-Empty:",
+	})
+	if err != nil {
+		t.Fatalf("expected valid headers, got %v", err)
+	}
+
+	if headers["Content-Type"] != "application/json" {
+		t.Fatalf("unexpected content type: %q", headers["Content-Type"])
+	}
+	if headers["Authorization"] != "Bearer token:with:colons" {
+		t.Fatalf("unexpected authorization header: %q", headers["Authorization"])
+	}
+	if headers["X-Empty"] != "" {
+		t.Fatalf("expected empty header value, got %q", headers["X-Empty"])
+	}
+}
+
+func TestParseHeadersRejectsInvalidSyntax(t *testing.T) {
+	tests := []struct {
+		name    string
+		header  string
+		wantErr string
+	}{
+		{name: "missing separator", header: "Authorization", wantErr: "expected Name: Value"},
+		{name: "empty name", header: ": value", wantErr: "name cannot be empty"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := config.ParseHeaders([]string{tt.header})
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tt.wantErr, err)
+			}
+		})
+	}
+}
+
 func TestBenchmarkConfigValidate(t *testing.T) {
 	validConfig := func() config.BenchmarkConfig {
 		return config.BenchmarkConfig{
@@ -89,6 +130,20 @@ func TestBenchmarkConfigValidate(t *testing.T) {
 				cfg.Request.Timeout = 0
 			},
 			wantErrText: "timeout must be greater than zero",
+		},
+		{
+			name: "header name must be valid",
+			configure: func(cfg *config.BenchmarkConfig) {
+				cfg.Request.Headers = map[string]string{"Invalid Header": "value"}
+			},
+			wantErrText: "invalid HTTP headers",
+		},
+		{
+			name: "header value must not contain newlines",
+			configure: func(cfg *config.BenchmarkConfig) {
+				cfg.Request.Headers = map[string]string{"X-Test": "valid\r\ninjected: value"}
+			},
+			wantErrText: "invalid HTTP headers",
 		},
 	}
 
