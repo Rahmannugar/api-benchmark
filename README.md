@@ -111,17 +111,51 @@ JSON mode writes one JSON object to standard output without progress text:
 ```bash
 ./api-benchmark \
   -url "http://localhost:8080/api/items" \
-  -n 1000 \
-  -c 25 \
+  -n 100 \
+  -c 10 \
   -format json
 ```
 
-The JSON report contains the target, redacted configuration, request counts,
-throughput, successful latency in milliseconds, status codes, and errors.
-Pipe the command into `jq` when formatted or filtered JSON is useful:
+Example output:
 
-```bash
-./api-benchmark -url "http://localhost:8080/api/items" -format json | jq
+```json
+{
+  "target": {
+    "method": "GET",
+    "url": "http://localhost:8080/api/items"
+  },
+  "configuration": {
+    "total_requests": 100,
+    "concurrency": 10,
+    "max_requests_per_second": 0,
+    "timeout_seconds": 10,
+    "headers": {},
+    "body_size_bytes": 0
+  },
+  "summary": {
+    "elapsed_seconds": 0.235240917,
+    "attempted_requests": 100,
+    "successful_requests": 100,
+    "failed_requests": 0,
+    "throughput": {
+      "estimated_requests_per_second": 425.1,
+      "successful_requests_per_second": 425.1
+    },
+    "successful_latency_ms": {
+      "average": 22.939466,
+      "minimum": 4.723625,
+      "maximum": 114.392625,
+      "p50": 18.412,
+      "p90": 43.806,
+      "p95": 57.114,
+      "p99": 92.731
+    },
+    "status_codes": {
+      "200": 100
+    },
+    "errors": {}
+  }
+}
 ```
 
 ### Paced requests
@@ -137,8 +171,15 @@ five slow requests to overlap:
   -rate 2
 ```
 
-Pacing does not bypass a target's rate limiter. It helps keep a benchmark below a
-known limit so successful endpoint behavior can be measured without producing
+Here, `-rate 2` starts no more than two requests per second, so request starts
+are spaced about 500 milliseconds apart. `-c 5` allows up to five requests to be
+running at the same time. If a request takes longer than 500 milliseconds, the
+next request may start while the earlier one is still running. If all five
+workers are busy, the next request waits, so the actual start rate becomes lower
+than two requests per second.
+
+Pacing does not bypass a target's rate limiter. It helps keep a benchmark below
+a known limit so successful endpoint behavior can be measured without producing
 mostly `429 Too Many Requests` responses.
 
 ## Text Output
@@ -172,6 +213,32 @@ STATUS CODE DISTRIBUTION
 ==================================
 ```
 
+When requests fail before receiving an HTTP response, text output includes an
+error breakdown:
+
+```text
+==================================
+BENCHMARK SUMMARY
+==================================
+Elapsed Time          : 3.142625ms
+Requests Attempted    : 10
+Successful Requests   : 0
+Failed Requests       : 10
+Estimated Throughput  : 3182.06 req/sec
+Successful Throughput : 0.00 req/sec
+----------------------------------
+SUCCESSFUL REQUEST LATENCY
+No successful requests recorded.
+----------------------------------
+ERROR BREAKDOWN
+   - Get "http://localhost:8080/api/items": dial tcp 127.0.0.1:8080: connect: connection refused: 10 occurrences
+==================================
+```
+
+JSON output places the same counts in `summary.errors`. HTTP failures such as
+`429 Too Many Requests` appear in `summary.status_codes` because the server
+returned a response.
+
 ## Metric Semantics
 
 - **Elapsed time** is wall-clock benchmark execution time.
@@ -182,8 +249,8 @@ STATUS CODE DISTRIBUTION
   truncated bodies, and cancellation errors.
 - **Estimated throughput** is attempted requests divided by elapsed seconds.
 - **Successful throughput** is successful requests divided by elapsed seconds.
-- **Request rate** is an optional ceiling on new request starts. It does not
-  guarantee that rate when workers are occupied by slower responses.
+- **Request rate** limits how quickly requests may start. Slow responses can make
+  the actual request rate lower than this limit.
 - **Latency** starts before the HTTP exchange and ends after the complete response
   body has been read and closed.
 - **Latency statistics** use successful requests only. Percentiles use the exact

@@ -8,8 +8,8 @@ throughput, latency, status code, and error metrics.
 
 The tool uses a closed-loop worker model: each worker starts its next request
 after its current request finishes. Concurrency controls the maximum number of
-requests in flight. Optional pacing adds a maximum global request start rate but
-does not guarantee that rate when all workers are occupied.
+requests running at the same time. Optional pacing limits how quickly requests
+may start. Slow responses can make the actual request rate lower than this limit.
 
 ## Components
 
