@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -26,13 +27,13 @@ func NewHTTPClient(concurrency int, timeout time.Duration) *http.Client {
 }
 
 // SendRequest executes a single HTTP request with the provided configuration and measures its duration
-func SendRequest(client *http.Client, requestConfig *config.RequestConfig) RequestResult {
+func SendRequest(ctx context.Context, client *http.Client, requestConfig *config.RequestConfig) RequestResult {
 	var bodyReader io.Reader
 	if len(requestConfig.Body) > 0 {
 		bodyReader = bytes.NewReader(requestConfig.Body)
 	}
 
-	req, err := http.NewRequest(requestConfig.Method, requestConfig.URL, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, requestConfig.Method, requestConfig.URL, bodyReader)
 	if err != nil {
 		return RequestResult{
 			Duration:   0,

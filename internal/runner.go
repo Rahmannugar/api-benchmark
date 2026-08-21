@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -8,7 +9,7 @@ import (
 )
 
 // RunBenchmark executes the configured requests and returns their aggregate metrics.
-func RunBenchmark(cfg config.BenchmarkConfig) Summary {
+func RunBenchmark(ctx context.Context, cfg config.BenchmarkConfig) Summary {
 	startTime := time.Now()
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = 1
@@ -32,7 +33,10 @@ func RunBenchmark(cfg config.BenchmarkConfig) Summary {
 		go func() {
 			defer wg.Done()
 			for range jobs {
-				results <- SendRequest(client, &cfg.Request)
+				if ctx.Err() != nil {
+					return
+				}
+				results <- SendRequest(ctx, client, &cfg.Request)
 			}
 		}()
 	}
@@ -41,7 +45,11 @@ func RunBenchmark(cfg config.BenchmarkConfig) Summary {
 	go func() {
 		defer close(jobs)
 		for range cfg.TotalRequests {
-			jobs <- struct{}{}
+			select {
+			case jobs <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 

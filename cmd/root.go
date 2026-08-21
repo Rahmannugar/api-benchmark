@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"strings"
@@ -22,8 +23,8 @@ func (h *headerFlags) Set(value string) error {
 	return nil
 }
 
-// Execute parses CLI flags and runs the benchmark process
-func Execute() error {
+// Execute parses CLI flags and runs the benchmark process.
+func Execute(ctx context.Context) error {
 	// Define command-line flags
 	urlFlag := flag.String("url", "http://localhost:8080", "Target URL to benchmark")
 	methodFlag := flag.String("m", "GET", "HTTP method (GET, POST, PUT, DELETE, PATCH, etc.)")
@@ -70,8 +71,11 @@ func Execute() error {
 
 	printBenchmarkConfiguration(benchConfig)
 
-	summary := internal.RunBenchmark(benchConfig)
+	summary := internal.RunBenchmark(ctx, benchConfig)
 	printSummary(summary)
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("benchmark interrupted: %w", err)
+	}
 
 	return nil
 }

@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -41,7 +42,7 @@ func TestSendRequestCustomMethodAndHeaders(t *testing.T) {
 		Timeout: 5 * time.Second,
 	}
 
-	result := internal.SendRequest(client, &reqCfg)
+	result := internal.SendRequest(context.Background(), client, &reqCfg)
 	if result.Error != nil {
 		t.Fatalf("expected no error, got %v", result.Error)
 	}
@@ -71,7 +72,7 @@ func TestSendRequestIncludesResponseBodyReadInLatency(t *testing.T) {
 		Timeout: time.Second,
 	}
 
-	result := internal.SendRequest(client, &requestConfig)
+	result := internal.SendRequest(context.Background(), client, &requestConfig)
 	if result.Error != nil {
 		t.Fatalf("expected no error, got %v", result.Error)
 	}
@@ -96,7 +97,7 @@ func TestSendRequestReportsTruncatedResponseBody(t *testing.T) {
 		Timeout: time.Second,
 	}
 
-	result := internal.SendRequest(client, &requestConfig)
+	result := internal.SendRequest(context.Background(), client, &requestConfig)
 	if !errors.Is(result.Error, io.ErrUnexpectedEOF) {
 		t.Fatalf("expected unexpected EOF, got %v", result.Error)
 	}
@@ -136,7 +137,7 @@ func TestRunBenchmark(t *testing.T) {
 		Concurrency:   10,
 	}
 
-	summary := internal.RunBenchmark(benchCfg)
+	summary := internal.RunBenchmark(context.Background(), benchCfg)
 	if requestCount.Load() != 105 {
 		t.Fatalf("expected server to receive 105 requests, got %d", requestCount.Load())
 	}
@@ -168,5 +169,55 @@ func TestRunBenchmark(t *testing.T) {
 	}
 	if summary.EstimatedThroughput <= 0 || summary.SuccessfulThroughput <= 0 {
 		t.Fatalf("expected positive throughput metrics, got %+v", summary)
+	}
+}
+
+func TestRunBenchmarkCancellation(t *testing.T) {
+	const concurrency = 4
+	started := make(chan struct{}, concurrency)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started <- struct{}{}
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	benchCfg := config.BenchmarkConfig{
+		Request: config.RequestConfig{
+			Method:  http.MethodGet,
+			URL:     server.URL,
+			Timeout: 5 * time.Second,
+		},
+		TotalRequests: 100,
+		Concurrency:   concurrency,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan internal.Summary, 1)
+	go func() {
+		done <- internal.RunBenchmark(ctx, benchCfg)
+	}()
+
+	select {
+	case <-started:
+		cancel()
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for a request to start")
+	}
+
+	var summary internal.Summary
+	select {
+	case summary = <-done:
+	case <-time.After(time.Second):
+		t.Fatal("benchmark did not stop after cancellation")
+	}
+
+	if summary.AttemptedRequests == 0 || summary.AttemptedRequests > concurrency {
+		t.Fatalf("expected 1-%d attempted requests, got %d", concurrency, summary.AttemptedRequests)
+	}
+	if summary.SuccessfulRequests != 0 || summary.FailedRequests != summary.AttemptedRequests {
+		t.Fatalf("expected every attempted request to fail after cancellation, got %+v", summary)
+	}
+	if len(summary.Errors) == 0 {
+		t.Fatal("expected cancellation errors to be recorded")
 	}
 }
