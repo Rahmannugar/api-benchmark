@@ -1,173 +1,236 @@
-# ⚡ CLI Benchmarking Tool (`go-bench`)
+# API Benchmark
 
-A fast, lightweight, and concurrent HTTP benchmarking command-line tool written in Go. Designed to stress-test and evaluate the performance of HTTP web servers, APIs, and microservices with granular metrics.
+API Benchmark is a lightweight command-line tool for measuring HTTP endpoint
+throughput, latency, status codes, and request failures. It repeats one request
+configuration through a bounded goroutine worker pool and prints the result as
+terminal text or JSON.
 
----
+## Features
 
-## ✨ Features
+- Bounded worker pool with configurable concurrency.
+- Support for any valid HTTP method.
+- Repeatable custom headers and optional request bodies.
+- Per-request timeout covering the complete HTTP exchange.
+- Connection pooling and response-body draining for connection reuse.
+- Estimated and successful throughput.
+- Average, minimum, maximum, P50, P90, P95, and P99 successful latency.
+- HTTP status code and request error distributions.
+- Text output for humans and JSON output for scripts.
+- Sensitive header redaction in displayed configuration.
+- Graceful cancellation for interrupt signals and `SIGTERM`.
 
-- **🚀 High Concurrency**: Efficient worker pool architecture running across Goroutines.
-- **🔄 Any HTTP Method**: Full support for `GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `HEAD`, `OPTIONS`, and more.
-- **📋 Custom Headers**: Repeatable `-H` / `-header` flag to pass authorization tokens, content types, or custom metadata.
-- **📝 Request Body / Payloads**: Pass raw JSON, XML, or plain text payloads with `-d` / `-data` / `-body`.
-- **⏱️ Per-Request Timeouts**: Configurable timeout (`-t` / `-timeout`) to prevent hanging connections.
-- **🔌 Optimized Connection Pooling**: Tuned `http.Transport` connection reuse preventing socket exhaustion at high RPS.
-- **📊 Rich Performance Metrics**:
-  - Total elapsed time & throughput (Requests Per Second - RPS).
-  - Success vs. Failed requests count.
-  - Latency statistics (Average, Minimum, Maximum).
-  - Detailed **HTTP Status Code distribution** (e.g. `200 OK`, `400 Bad Request`, `404 Not Found`).
-  - Network and connection **Error breakdown**.
+## Requirements
 
----
+- Go 1.26.4 or later.
 
-## 📦 Installation & Setup
+## Installation
 
-### Prerequisites
-- [Go](https://go.dev/dl/) `1.20+` installed.
+Clone and build the executable:
 
-### Build from Source
 ```bash
-# Clone the repository
 git clone https://github.com/mbrik/CLI-Benchmarking-Tool.git
-cd CLI-Benchmarking-Tool/go-bench
-
-# Build executable
-go build -o go-bench .
+cd CLI-Benchmarking-Tool
+go build -o api-benchmark .
 ```
 
-On Windows, this produces `go-bench.exe`.
+The executable name comes from the `-o` argument. On Windows, use:
 
----
+```powershell
+go build -o api-benchmark.exe .
+```
 
-## 🛠️ CLI Flags & Usage
+During development, the tool can also run without a separate build step:
+
+```bash
+go run . -url "http://localhost:8080/health" -n 100 -c 10
+```
+
+## Usage
 
 ```text
-Usage: go-bench [options]
+api-benchmark [flags]
 
-Flags:
-  -url string       Target URL to benchmark (default "http://localhost:8080")
-  -m, -method       HTTP method: GET, POST, PUT, DELETE, PATCH, etc. (default "GET")
-  -n int            Total number of requests to execute (default 1000)
-  -c int            Number of concurrent workers (default 10)
-  -d, -data, -body  Request payload / data string (default "")
-  -H, -header       Custom HTTP header (repeatable for multiple headers)
-  -t, -timeout      Per-request timeout duration, e.g. 5s, 10s, 1m (default 10s)
-  -help             Show help documentation
+  -url string
+        Target URL (default "http://localhost:8080")
+  -m, -method string
+        HTTP method (default "GET")
+  -n int
+        Total number of requests (default 1000)
+  -c int
+        Number of concurrent workers (default 10)
+  -H, -header value
+        Custom header in "Name: Value" form; repeat for multiple headers
+  -d, -data, -body string
+        Request body
+  -t, -timeout duration
+        Per-request timeout (default 10s)
+  -format string
+        Output format: text or json (default "text")
 ```
 
----
+Total requests, concurrency, timeout, method, URL, and headers are validated
+before workers start. Concurrency cannot exceed the total request count.
 
-## 🚀 Examples
+## Examples
 
-### 1. Basic GET Benchmark
-Benchmark a GET endpoint with 2,000 total requests across 20 concurrent workers:
+### GET endpoint
+
+Run 2,000 total requests using 20 concurrent workers:
+
 ```bash
-./go-bench -url "http://localhost:8080/get?key=username" -n 2000 -c 20
+./api-benchmark \
+  -url "http://localhost:8080/api/items?limit=20" \
+  -n 2000 \
+  -c 20
 ```
 
-### 2. POST Benchmark with JSON Body & Headers
-Send POST requests with a JSON body and custom authentication headers:
+### Authenticated POST endpoint
+
 ```bash
-./go-bench -url "http://localhost:8080/api/users" \
-  -m POST \
+./api-benchmark \
+  -url "http://localhost:8080/api/items" \
+  -method POST \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer my_secret_token" \
-  -d '{"name": "Alice", "role": "admin"}' \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -data '{"name":"Example"}' \
   -n 1000 \
-  -c 25
+  -c 25 \
+  -timeout 15s
 ```
 
-### 3. PUT Request with Custom Timeout
+Authorization, cookie, API key, token, and secret header values are sent to the
+target normally but shown as `[REDACTED]` in reports.
+
+### JSON output
+
+JSON mode writes one JSON object to standard output without progress text:
+
 ```bash
-./go-bench -url "http://localhost:8080/api/resource/1" \
-  -m PUT \
-  -d '{"status": "active"}' \
-  -t 5s \
-  -n 500 \
-  -c 10
+./api-benchmark \
+  -url "http://localhost:8080/api/items" \
+  -n 1000 \
+  -c 25 \
+  -format json
 ```
 
-### 4. DELETE Benchmark
+The JSON report contains the target, redacted configuration, request counts,
+throughput, successful latency in milliseconds, status codes, and errors.
+Pipe the command into `jq` when formatted or filtered JSON is useful:
+
 ```bash
-./go-bench -url "http://localhost:8080/api/items/42" -m DELETE -n 200 -c 10
+./api-benchmark -url "http://localhost:8080/api/items" -format json | jq
 ```
 
----
-
-## 📊 Sample Output
+## Text Output
 
 ```text
-🎯 Benchmarking Target: [POST] http://localhost:8080/set?key=username&value=test
-📦 Total Requests: 50000 | Concurrency: 20 | Timeout: 10s
-⏳ Running benchmark, please wait...
+Benchmark Target: [GET] http://localhost:8080/api/items
+Requests: 100 | Concurrency: 10 | Timeout: 10s
+Running benchmark, please wait...
 
 ==================================
-📊 BENCHMARK RESULTS SUMMARY
+BENCHMARK SUMMARY
 ==================================
-Total Time Taken   : 39.5860176s
-Successful Requests: 50000
-Failed Requests    : 0
-Requests Per Sec   : 1263.07 req/sec
-Average Latency    : 15.801105ms
-Minimum Latency    : 968.6µs
-Maximum Latency    : 35.9232ms
+Elapsed Time          : 235.240917ms
+Requests Attempted    : 100
+Successful Requests   : 100
+Failed Requests       : 0
+Estimated Throughput  : 425.10 req/sec
+Successful Throughput : 425.10 req/sec
 ----------------------------------
-📈 Status Codes Distribution:
-   [200 OK]: 50000 responses
+SUCCESSFUL REQUEST LATENCY
+P50                    : 18.412ms
+P90                    : 43.806ms
+P95                    : 57.114ms
+P99                    : 92.731ms
+Average                : 22.939466ms
+Minimum                : 4.723625ms
+Maximum                : 114.392625ms
+----------------------------------
+STATUS CODE DISTRIBUTION
+   [200 OK]: 100 responses
 ==================================
 ```
 
-When network errors or invalid endpoints occur:
-```text
-==================================
-📊 BENCHMARK RESULTS SUMMARY
-==================================
-Total Time Taken   : 38.2996ms
-Successful Requests: 0
-Failed Requests    : 500
-Requests Per Sec   : 13054.97 req/sec
-Average Latency    : 1.309235ms
-Minimum Latency    : 0s
-Maximum Latency    : 12.7131ms
-----------------------------------
-📈 Status Codes Distribution:
-   [400 Bad Request]: 500 responses
-----------------------------------
-❌ Error Breakdown:
-   - dial tcp 127.0.0.1:8080: connectex: No connection could be made... : 10 occurrences
-==================================
-```
+## Metric Semantics
 
----
+- **Elapsed time** is wall-clock benchmark execution time.
+- **Attempted requests** are requests that reached a worker and produced a result.
+- **Successful requests** have no execution error and a final status from 200 to
+  399.
+- **Failed requests** include non-success statuses, timeouts, connection errors,
+  truncated bodies, and cancellation errors.
+- **Estimated throughput** is attempted requests divided by elapsed seconds.
+- **Successful throughput** is successful requests divided by elapsed seconds.
+- **Latency** starts before the HTTP exchange and ends after the complete response
+  body has been read and closed.
+- **Latency statistics** use successful requests only. Percentiles use the exact
+  nearest-rank method.
 
-## 🧪 Running Unit Tests
+A `429 Too Many Requests` response is therefore a failed request. It contributes
+to estimated throughput and status distribution, but not successful throughput or
+successful latency percentiles. The benchmark reports the target's rate limiting;
+it does not bypass it.
 
-Run the test suite:
+## Concurrency And Memory
+
+With `N` requests and concurrency `C`, the runner creates at most `min(N, C)`
+workers. Each worker handles requests sequentially, so no more than `C` requests
+are in flight.
+
+Job and result channel memory scales with concurrency. Request counts, status
+codes, and errors are aggregated as results arrive instead of retaining every
+full result. Exact percentiles still require one stored duration per successful
+request.
+
+The load model is closed-loop: a worker starts its next request after its current
+request finishes. The tool does not currently target a fixed requests-per-second
+arrival rate.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete execution flow and
+concurrency lifecycle.
+
+## Cancellation
+
+Interrupt signals and `SIGTERM` stop job production and cancel in-flight HTTP
+requests. The tool prints a partial report containing requests that actually
+started, then exits with an interruption error. `SIGKILL` cannot be handled by an
+application.
+
+## Testing
+
 ```bash
-go test -v ./...
+go test ./...
+go test -race ./...
+go vet ./...
 ```
 
----
+Tests use local `httptest` servers and do not require an external API.
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
-go-bench/
-├── cmd/
-│   └── root.go          # CLI flag parsing, pre-execution banner, and report rendering
-├── internal/
-│   ├── models.go        # (or within worker.go) Request & Benchmark configuration types
-│   ├── runner.go        # Concurrent worker pool and job distribution
-│   ├── runner_test.go   # Automated tests with httptest server
-│   ├── stats.go         # Latency, status codes, and error metrics calculation
-│   └── worker.go        # HTTP client setup, connection pooling, and request execution
-├── main.go              # Entry point invoking cmd.Execute()
-├── go.mod               # Module configuration
-└── README.md            # Documentation
+.
+|-- cmd/
+|   |-- report.go
+|   |-- report_test.go
+|   `-- root.go
+|-- internal/
+|   |-- config/
+|   |   |-- config.go
+|   |   `-- config_test.go
+|   |-- result.go
+|   |-- runner.go
+|   |-- runner_test.go
+|   |-- stats.go
+|   |-- stats_test.go
+|   `-- worker.go
+|-- ARCHITECTURE.md
+|-- README.md
+|-- go.mod
+`-- main.go
 ```
 
----
-
-## 📄 License
-This project is open source and available under the [MIT License](LICENSE).
+Run load tests against disposable test environments or disposable data whenever
+possible. Requests to endpoints that create, update, or delete data can produce
+real side effects.
