@@ -8,6 +8,7 @@ terminal text or JSON.
 ## Features
 
 - Bounded worker pool with configurable concurrency.
+- Optional maximum request start rate for paced benchmarks.
 - Support for any valid HTTP method.
 - Repeatable custom headers and optional request bodies.
 - Per-request timeout covering the complete HTTP exchange.
@@ -58,6 +59,8 @@ api-benchmark [flags]
         Total number of requests (default 1000)
   -c int
         Number of concurrent workers (default 10)
+  -r, -rate float
+        Maximum requests started per second; 0 means unlimited (default 0)
   -H, -header value
         Custom header in "Name: Value" form; repeat for multiple headers
   -d, -data, -body string
@@ -121,11 +124,28 @@ Pipe the command into `jq` when formatted or filtered JSON is useful:
 ./api-benchmark -url "http://localhost:8080/api/items" -format json | jq
 ```
 
+### Paced requests
+
+Limit the benchmark to at most two new requests per second while allowing up to
+five slow requests to overlap:
+
+```bash
+./api-benchmark \
+  -url "http://localhost:8080/api/analytics/dashboard?period=all&currency=NGN" \
+  -n 50 \
+  -c 5 \
+  -rate 2
+```
+
+Pacing does not bypass a target's rate limiter. It helps keep a benchmark below a
+known limit so successful endpoint behavior can be measured without producing
+mostly `429 Too Many Requests` responses.
+
 ## Text Output
 
 ```text
 Benchmark Target: [GET] http://localhost:8080/api/items
-Requests: 100 | Concurrency: 10 | Timeout: 10s
+Requests: 100 | Concurrency: 10 | Rate: unlimited | Timeout: 10s
 Running benchmark, please wait...
 
 ==================================
@@ -162,6 +182,8 @@ STATUS CODE DISTRIBUTION
   truncated bodies, and cancellation errors.
 - **Estimated throughput** is attempted requests divided by elapsed seconds.
 - **Successful throughput** is successful requests divided by elapsed seconds.
+- **Request rate** is an optional ceiling on new request starts. It does not
+  guarantee that rate when workers are occupied by slower responses.
 - **Latency** starts before the HTTP exchange and ends after the complete response
   body has been read and closed.
 - **Latency statistics** use successful requests only. Percentiles use the exact
@@ -183,9 +205,9 @@ codes, and errors are aggregated as results arrive instead of retaining every
 full result. Exact percentiles still require one stored duration per successful
 request.
 
-The load model is closed-loop: a worker starts its next request after its current
-request finishes. The tool does not currently target a fixed requests-per-second
-arrival rate.
+The worker model is closed-loop: a worker starts its next request after its
+current request finishes. Optional rate pacing also limits how quickly jobs are
+handed to ready workers.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the complete execution flow and
 concurrency lifecycle.

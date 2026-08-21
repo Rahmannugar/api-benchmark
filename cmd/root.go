@@ -34,6 +34,8 @@ func Execute(ctx context.Context) error {
 
 	requestsFlag := flag.Int("n", 1000, "Total number of requests to perform")
 	concurrencyFlag := flag.Int("c", 10, "Number of concurrent workers")
+	rateFlag := flag.Float64("r", 0, "Maximum requests started per second; 0 means unlimited")
+	flag.Float64Var(rateFlag, "rate", 0, "Maximum requests started per second (alias for -r)")
 	formatFlag := flag.String("format", "text", "Output format: text or json")
 
 	dataFlag := flag.String("d", "", "HTTP request body / data")
@@ -69,9 +71,10 @@ func Execute(ctx context.Context) error {
 	}
 
 	benchConfig := config.BenchmarkConfig{
-		Request:       reqConfig,
-		TotalRequests: *requestsFlag,
-		Concurrency:   *concurrencyFlag,
+		Request:           reqConfig,
+		TotalRequests:     *requestsFlag,
+		Concurrency:       *concurrencyFlag,
+		RequestsPerSecond: *rateFlag,
 	}
 	if err := benchConfig.Validate(); err != nil {
 		return fmt.Errorf("invalid benchmark configuration: %w", err)

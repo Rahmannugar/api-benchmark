@@ -46,8 +46,9 @@ func TestWriteJSONReport(t *testing.T) {
 			Body:    []byte(`{"name":"item"}`),
 			Timeout: 1500 * time.Millisecond,
 		},
-		TotalRequests: 100,
-		Concurrency:   10,
+		TotalRequests:     100,
+		Concurrency:       10,
+		RequestsPerSecond: 2.5,
 	}
 	summary := stats.Summary{
 		AttemptedRequests:    100,
@@ -86,6 +87,9 @@ func TestWriteJSONReport(t *testing.T) {
 	}
 	if report.Configuration.TimeoutSeconds != 1.5 {
 		t.Fatalf("expected 1.5 timeout seconds, got %f", report.Configuration.TimeoutSeconds)
+	}
+	if report.Configuration.MaxRequestsPerSecond != 2.5 {
+		t.Fatalf("expected 2.5 requests per second, got %f", report.Configuration.MaxRequestsPerSecond)
 	}
 	if report.Configuration.Headers["Authorization"] != "[REDACTED]" {
 		t.Fatalf("expected redacted headers, got %+v", report.Configuration.Headers)

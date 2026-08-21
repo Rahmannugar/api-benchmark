@@ -25,11 +25,12 @@ type jsonTarget struct {
 }
 
 type jsonConfiguration struct {
-	TotalRequests  int               `json:"total_requests"`
-	Concurrency    int               `json:"concurrency"`
-	TimeoutSeconds float64           `json:"timeout_seconds"`
-	Headers        map[string]string `json:"headers"`
-	BodySizeBytes  int               `json:"body_size_bytes"`
+	TotalRequests        int               `json:"total_requests"`
+	Concurrency          int               `json:"concurrency"`
+	MaxRequestsPerSecond float64           `json:"max_requests_per_second"`
+	TimeoutSeconds       float64           `json:"timeout_seconds"`
+	Headers              map[string]string `json:"headers"`
+	BodySizeBytes        int               `json:"body_size_bytes"`
 }
 
 type jsonSummary struct {
@@ -62,9 +63,10 @@ type jsonLatency struct {
 func PrintBenchmarkConfiguration(cfg config.BenchmarkConfig) {
 	fmt.Printf("Benchmark Target: [%s] %s\n", cfg.Request.Method, cfg.Request.URL)
 	fmt.Printf(
-		"Requests: %d | Concurrency: %d | Timeout: %v\n",
+		"Requests: %d | Concurrency: %d | Rate: %s | Timeout: %v\n",
 		cfg.TotalRequests,
 		cfg.Concurrency,
+		formatRequestRate(cfg.RequestsPerSecond),
 		cfg.Request.Timeout,
 	)
 	if len(cfg.Request.Headers) > 0 {
@@ -151,11 +153,12 @@ func WriteJSON(writer io.Writer, cfg config.BenchmarkConfig, summary stats.Summa
 			URL:    cfg.Request.URL,
 		},
 		Configuration: jsonConfiguration{
-			TotalRequests:  cfg.TotalRequests,
-			Concurrency:    cfg.Concurrency,
-			TimeoutSeconds: cfg.Request.Timeout.Seconds(),
-			Headers:        displayHeaders(cfg.Request.Headers),
-			BodySizeBytes:  len(cfg.Request.Body),
+			TotalRequests:        cfg.TotalRequests,
+			Concurrency:          cfg.Concurrency,
+			MaxRequestsPerSecond: cfg.RequestsPerSecond,
+			TimeoutSeconds:       cfg.Request.Timeout.Seconds(),
+			Headers:              displayHeaders(cfg.Request.Headers),
+			BodySizeBytes:        len(cfg.Request.Body),
 		},
 		Summary: jsonSummary{
 			ElapsedSeconds:     summary.ElapsedTime.Seconds(),
@@ -196,6 +199,14 @@ func displayHeaders(headers map[string]string) map[string]string {
 
 func durationMilliseconds(duration time.Duration) float64 {
 	return float64(duration) / float64(time.Millisecond)
+}
+
+func formatRequestRate(requestsPerSecond float64) string {
+	if requestsPerSecond == 0 {
+		return "unlimited"
+	}
+
+	return fmt.Sprintf("%g req/sec", requestsPerSecond)
 }
 
 func displayHeaderValue(name, value string) string {

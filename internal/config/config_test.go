@@ -1,6 +1,7 @@
 package config_test
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -88,6 +89,27 @@ func TestBenchmarkConfigValidate(t *testing.T) {
 				cfg.Concurrency = cfg.TotalRequests + 1
 			},
 			wantErrText: "concurrency cannot exceed total requests",
+		},
+		{
+			name: "request rate cannot be negative",
+			configure: func(cfg *config.BenchmarkConfig) {
+				cfg.RequestsPerSecond = -1
+			},
+			wantErrText: "request rate must be zero or a positive finite number",
+		},
+		{
+			name: "request rate cannot be NaN",
+			configure: func(cfg *config.BenchmarkConfig) {
+				cfg.RequestsPerSecond = math.NaN()
+			},
+			wantErrText: "request rate must be zero or a positive finite number",
+		},
+		{
+			name: "request rate cannot be infinite",
+			configure: func(cfg *config.BenchmarkConfig) {
+				cfg.RequestsPerSecond = math.Inf(1)
+			},
+			wantErrText: "request rate must be zero or a positive finite number",
 		},
 		{
 			name: "method is required",

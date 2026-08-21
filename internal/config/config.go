@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"strings"
@@ -19,9 +20,10 @@ type RequestConfig struct {
 
 // BenchmarkConfig contains the settings for a complete benchmark run.
 type BenchmarkConfig struct {
-	Request       RequestConfig
-	TotalRequests int
-	Concurrency   int
+	Request           RequestConfig
+	TotalRequests     int
+	Concurrency       int
+	RequestsPerSecond float64
 }
 
 // ParseHeaders converts repeated CLI header values into request headers.
@@ -53,6 +55,9 @@ func (c BenchmarkConfig) Validate() error {
 	}
 	if c.Concurrency > c.TotalRequests {
 		return fmt.Errorf("concurrency cannot exceed total requests")
+	}
+	if c.RequestsPerSecond < 0 || math.IsNaN(c.RequestsPerSecond) || math.IsInf(c.RequestsPerSecond, 0) {
+		return fmt.Errorf("request rate must be zero or a positive finite number")
 	}
 	if err := c.Request.Validate(); err != nil {
 		return fmt.Errorf("request configuration: %w", err)

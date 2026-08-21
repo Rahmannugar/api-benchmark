@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"math"
 	"sync"
 	"time"
 
@@ -23,8 +24,12 @@ func RunBenchmark(ctx context.Context, cfg config.BenchmarkConfig) stats.Summary
 	client := NewHTTPClient(workerCount, cfg.Request.Timeout)
 	defer client.CloseIdleConnections()
 
-	// Bound channel memory by worker count rather than total request count.
-	jobs := make(chan struct{}, workerCount)
+	// Paced jobs use direct handoff so queued work cannot restart in a burst.
+	jobBuffer := workerCount
+	if cfg.RequestsPerSecond > 0 {
+		jobBuffer = 0
+	}
+	jobs := make(chan struct{}, jobBuffer)
 	results := make(chan stats.RequestResult, workerCount)
 
 	var wg sync.WaitGroup
@@ -43,16 +48,7 @@ func RunBenchmark(ctx context.Context, cfg config.BenchmarkConfig) stats.Summary
 	}
 
 	// Produce jobs independently so workers can begin before every job is queued.
-	go func() {
-		defer close(jobs)
-		for range cfg.TotalRequests {
-			select {
-			case jobs <- struct{}{}:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	go produceJobs(ctx, jobs, cfg.TotalRequests, cfg.RequestsPerSecond)
 
 	// Results are complete only after every worker has stopped sending.
 	go func() {
@@ -67,4 +63,44 @@ func RunBenchmark(ctx context.Context, cfg config.BenchmarkConfig) stats.Summary
 	}
 
 	return accumulator.Finalize(time.Since(startTime))
+}
+
+func produceJobs(
+	ctx context.Context,
+	jobs chan<- struct{},
+	totalRequests int,
+	requestsPerSecond float64,
+) {
+	defer close(jobs)
+	if requestsPerSecond == 0 {
+		for range totalRequests {
+			select {
+			case jobs <- struct{}{}:
+			case <-ctx.Done():
+				return
+			}
+		}
+		return
+	}
+
+	intervalNanoseconds := float64(time.Second) / requestsPerSecond
+	intervalNanoseconds = max(1, min(intervalNanoseconds, float64(math.MaxInt64)))
+	interval := time.Duration(intervalNanoseconds)
+	timer := time.NewTimer(0)
+	defer timer.Stop()
+
+	for range totalRequests {
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			return
+		}
+
+		select {
+		case jobs <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
+		timer.Reset(interval)
+	}
 }

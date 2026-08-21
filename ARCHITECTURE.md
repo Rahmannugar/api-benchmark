@@ -6,9 +6,10 @@ API Benchmark is a command-line HTTP load generator. A benchmark repeats one
 configured HTTP request through a bounded worker pool and reports aggregate
 throughput, latency, status code, and error metrics.
 
-The tool uses a closed-loop model: each worker starts its next request after its
-current request finishes. Concurrency therefore controls the maximum number of
-requests in flight, not a fixed request arrival rate.
+The tool uses a closed-loop worker model: each worker starts its next request
+after its current request finishes. Concurrency controls the maximum number of
+requests in flight. Optional pacing adds a maximum global request start rate but
+does not guarantee that rate when all workers are occupied.
 
 ## Components
 
@@ -58,7 +59,8 @@ Bounded job channel --> worker goroutines --> bounded result channel
 4. `RunBenchmark` creates one HTTP client and a worker pool sized to the smaller
    of concurrency and total requests.
 5. A producer goroutine sends request jobs until the configured total is reached
-   or the context is cancelled.
+   or the context is cancelled. When a request rate is configured, it spaces job
+   handoffs globally across the worker pool.
 6. Each worker processes one job at a time through `SendRequest`, then takes the
    next available job.
 7. Completed request results are aggregated as they arrive. Full request results
@@ -76,9 +78,13 @@ For `N` total requests and concurrency `C`:
 - At most `C` HTTP requests can be in flight.
 - The job and result channel capacities are bounded by the worker count.
 - A worker handles multiple requests sequentially until the job channel closes.
+- A positive request rate spaces job handoffs; zero leaves request starts
+  unlimited.
 
 For example, `-n 1000 -c 10` queues 1,000 request jobs and uses 10 workers to
 process them. Each worker takes another job after its current request finishes.
+Adding `-rate 2` limits the complete pool to at most two new request starts per
+second.
 
 The producer closes the job channel after producing all jobs. Workers are the
 only result senders. A `sync.WaitGroup` tracks worker completion, and a separate
@@ -146,7 +152,7 @@ or partial report.
 ## Current Constraints
 
 - The benchmark repeats one request configuration for the complete run.
-- Load is concurrency-driven; there is no target request rate or pacing option.
+- Request pacing is a maximum start rate, not a guaranteed open-loop arrival rate.
 - Go's default redirect behavior is used, so metrics describe the final response
   after followed redirects.
 - Percentiles are exact and retain successful durations in memory.

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -220,5 +221,51 @@ func TestRunBenchmarkCancellation(t *testing.T) {
 	}
 	if len(summary.Errors) == 0 {
 		t.Fatal("expected cancellation errors to be recorded")
+	}
+}
+
+func TestRunBenchmarkRequestRate(t *testing.T) {
+	const (
+		totalRequests     = 4
+		requestsPerSecond = 20
+		minimumSpacing    = 40 * time.Millisecond
+	)
+
+	var mu sync.Mutex
+	requestTimes := make([]time.Time, 0, totalRequests)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		requestTimes = append(requestTimes, time.Now())
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	benchCfg := config.BenchmarkConfig{
+		Request: config.RequestConfig{
+			Method:  http.MethodGet,
+			URL:     server.URL,
+			Timeout: time.Second,
+		},
+		TotalRequests:     totalRequests,
+		Concurrency:       totalRequests,
+		RequestsPerSecond: requestsPerSecond,
+	}
+
+	summary := runner.RunBenchmark(context.Background(), benchCfg)
+	if summary.SuccessfulRequests != totalRequests {
+		t.Fatalf("expected %d successful requests, got %d", totalRequests, summary.SuccessfulRequests)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(requestTimes) != totalRequests {
+		t.Fatalf("expected %d recorded request times, got %d", totalRequests, len(requestTimes))
+	}
+	for i := 1; i < len(requestTimes); i++ {
+		spacing := requestTimes[i].Sub(requestTimes[i-1])
+		if spacing < minimumSpacing {
+			t.Fatalf("expected at least %v between requests, got %v", minimumSpacing, spacing)
+		}
 	}
 }
