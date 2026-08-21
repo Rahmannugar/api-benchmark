@@ -19,6 +19,7 @@ func RunBenchmark(cfg config.BenchmarkConfig) Summary {
 
 	workerCount := min(cfg.Concurrency, cfg.TotalRequests)
 	client := NewHTTPClient(workerCount, cfg.Request.Timeout)
+	defer client.CloseIdleConnections()
 
 	// Bound channel memory by worker count rather than total request count.
 	jobs := make(chan struct{}, workerCount)

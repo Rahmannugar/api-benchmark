@@ -1,6 +1,7 @@
 package internal_test
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -46,6 +47,61 @@ func TestSendRequestCustomMethodAndHeaders(t *testing.T) {
 	}
 	if result.StatusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", result.StatusCode)
+	}
+}
+
+func TestSendRequestIncludesResponseBodyReadInLatency(t *testing.T) {
+	const bodyDelay = 50 * time.Millisecond
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
+		time.Sleep(bodyDelay)
+		_, _ = w.Write([]byte("complete"))
+	}))
+	defer server.Close()
+
+	client := internal.NewHTTPClient(1, time.Second)
+	defer client.CloseIdleConnections()
+	requestConfig := config.RequestConfig{
+		Method:  http.MethodGet,
+		URL:     server.URL,
+		Timeout: time.Second,
+	}
+
+	result := internal.SendRequest(client, &requestConfig)
+	if result.Error != nil {
+		t.Fatalf("expected no error, got %v", result.Error)
+	}
+	if result.Duration < bodyDelay {
+		t.Fatalf("expected latency to include %v body delay, got %v", bodyDelay, result.Duration)
+	}
+}
+
+func TestSendRequestReportsTruncatedResponseBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "100")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("incomplete"))
+	}))
+	defer server.Close()
+
+	client := internal.NewHTTPClient(1, time.Second)
+	defer client.CloseIdleConnections()
+	requestConfig := config.RequestConfig{
+		Method:  http.MethodGet,
+		URL:     server.URL,
+		Timeout: time.Second,
+	}
+
+	result := internal.SendRequest(client, &requestConfig)
+	if !errors.Is(result.Error, io.ErrUnexpectedEOF) {
+		t.Fatalf("expected unexpected EOF, got %v", result.Error)
+	}
+	if result.StatusCode != http.StatusOK {
+		t.Fatalf("expected status 200 to be retained, got %d", result.StatusCode)
 	}
 }
 

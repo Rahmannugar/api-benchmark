@@ -2,6 +2,7 @@ package internal
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -47,19 +48,24 @@ func SendRequest(client *http.Client, requestConfig *config.RequestConfig) Reque
 
 	start := time.Now()
 	resp, err := client.Do(req)
-	duration := time.Since(start)
-
 	if err != nil {
 		return RequestResult{
-			Duration:   duration,
+			Duration:   time.Since(start),
 			Error:      err,
 			StatusCode: 0,
 		}
 	}
 
-	// Discard and close the response body to allow connection reuse
-	_, _ = io.Copy(io.Discard, resp.Body)
-	_ = resp.Body.Close()
+	_, readErr := io.Copy(io.Discard, resp.Body)
+	closeErr := resp.Body.Close()
+	duration := time.Since(start)
+	if err := errors.Join(readErr, closeErr); err != nil {
+		return RequestResult{
+			Duration:   duration,
+			Error:      err,
+			StatusCode: resp.StatusCode,
+		}
+	}
 
 	return RequestResult{
 		Duration:   duration,
