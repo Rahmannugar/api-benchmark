@@ -1,4 +1,4 @@
-package internal
+package stats
 
 import (
 	"math"
@@ -6,13 +6,15 @@ import (
 	"time"
 )
 
-type statsAccumulator struct {
+// Accumulator collects request outcomes as workers complete them.
+type Accumulator struct {
 	summary             Summary
 	successfulDurations []time.Duration
 }
 
-func newStatsAccumulator(initialCapacity int) *statsAccumulator {
-	return &statsAccumulator{
+// NewAccumulator creates a streaming benchmark stats collector.
+func NewAccumulator(initialCapacity int) *Accumulator {
+	return &Accumulator{
 		summary: Summary{
 			StatusCodes: make(map[int]int),
 			Errors:      make(map[string]int),
@@ -21,7 +23,8 @@ func newStatsAccumulator(initialCapacity int) *statsAccumulator {
 	}
 }
 
-func (a *statsAccumulator) add(result RequestResult) {
+// Add records one completed request result.
+func (a *Accumulator) Add(result RequestResult) {
 	a.summary.AttemptedRequests++
 
 	if result.StatusCode > 0 {
@@ -39,7 +42,8 @@ func (a *statsAccumulator) add(result RequestResult) {
 	a.successfulDurations = append(a.successfulDurations, result.Duration)
 }
 
-func (a *statsAccumulator) finalize(elapsedTime time.Duration) Summary {
+// Finalize calculates latency and throughput for the completed run.
+func (a *Accumulator) Finalize(elapsedTime time.Duration) Summary {
 	a.summary.ElapsedTime = elapsedTime
 	a.summary.SuccessfulLatency = calculateLatencyStats(a.successfulDurations)
 
@@ -53,12 +57,12 @@ func (a *statsAccumulator) finalize(elapsedTime time.Duration) Summary {
 
 // CalculateStats processes collected results and computes performance metrics.
 func CalculateStats(results []RequestResult, elapsedTime time.Duration) Summary {
-	stats := newStatsAccumulator(len(results))
+	stats := NewAccumulator(len(results))
 	for _, result := range results {
-		stats.add(result)
+		stats.Add(result)
 	}
 
-	return stats.finalize(elapsedTime)
+	return stats.Finalize(elapsedTime)
 }
 
 func isSuccessfulResult(result RequestResult) bool {

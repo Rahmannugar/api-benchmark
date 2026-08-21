@@ -1,4 +1,4 @@
-package internal
+package runner
 
 import (
 	"context"
@@ -6,16 +6,17 @@ import (
 	"time"
 
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
 )
 
 // RunBenchmark executes the configured requests and returns their aggregate metrics.
-func RunBenchmark(ctx context.Context, cfg config.BenchmarkConfig) Summary {
+func RunBenchmark(ctx context.Context, cfg config.BenchmarkConfig) stats.Summary {
 	startTime := time.Now()
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = 1
 	}
 	if cfg.TotalRequests <= 0 {
-		return newStatsAccumulator(0).finalize(time.Since(startTime))
+		return stats.NewAccumulator(0).Finalize(time.Since(startTime))
 	}
 
 	workerCount := min(cfg.Concurrency, cfg.TotalRequests)
@@ -24,7 +25,7 @@ func RunBenchmark(ctx context.Context, cfg config.BenchmarkConfig) Summary {
 
 	// Bound channel memory by worker count rather than total request count.
 	jobs := make(chan struct{}, workerCount)
-	results := make(chan RequestResult, workerCount)
+	results := make(chan stats.RequestResult, workerCount)
 
 	var wg sync.WaitGroup
 	wg.Add(workerCount)
@@ -60,10 +61,10 @@ func RunBenchmark(ctx context.Context, cfg config.BenchmarkConfig) Summary {
 	}()
 
 	// Aggregate each result immediately instead of retaining every full result.
-	stats := newStatsAccumulator(workerCount)
+	accumulator := stats.NewAccumulator(workerCount)
 	for result := range results {
-		stats.add(result)
+		accumulator.Add(result)
 	}
 
-	return stats.finalize(time.Since(startTime))
+	return accumulator.Finalize(time.Since(startTime))
 }

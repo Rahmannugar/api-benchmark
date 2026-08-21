@@ -1,4 +1,4 @@
-package internal
+package runner
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
 )
 
 // NewHTTPClient creates an optimized HTTP client with connection pooling scaled for concurrency
@@ -27,7 +28,7 @@ func NewHTTPClient(concurrency int, timeout time.Duration) *http.Client {
 }
 
 // SendRequest executes a single HTTP request with the provided configuration and measures its duration
-func SendRequest(ctx context.Context, client *http.Client, requestConfig *config.RequestConfig) RequestResult {
+func SendRequest(ctx context.Context, client *http.Client, requestConfig *config.RequestConfig) stats.RequestResult {
 	var bodyReader io.Reader
 	if len(requestConfig.Body) > 0 {
 		bodyReader = bytes.NewReader(requestConfig.Body)
@@ -35,7 +36,7 @@ func SendRequest(ctx context.Context, client *http.Client, requestConfig *config
 
 	req, err := http.NewRequestWithContext(ctx, requestConfig.Method, requestConfig.URL, bodyReader)
 	if err != nil {
-		return RequestResult{
+		return stats.RequestResult{
 			Duration:   0,
 			Error:      err,
 			StatusCode: 0,
@@ -50,7 +51,7 @@ func SendRequest(ctx context.Context, client *http.Client, requestConfig *config
 	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
-		return RequestResult{
+		return stats.RequestResult{
 			Duration:   time.Since(start),
 			Error:      err,
 			StatusCode: 0,
@@ -61,14 +62,14 @@ func SendRequest(ctx context.Context, client *http.Client, requestConfig *config
 	closeErr := resp.Body.Close()
 	duration := time.Since(start)
 	if err := errors.Join(readErr, closeErr); err != nil {
-		return RequestResult{
+		return stats.RequestResult{
 			Duration:   duration,
 			Error:      err,
 			StatusCode: resp.StatusCode,
 		}
 	}
 
-	return RequestResult{
+	return stats.RequestResult{
 		Duration:   duration,
 		Error:      nil,
 		StatusCode: resp.StatusCode,

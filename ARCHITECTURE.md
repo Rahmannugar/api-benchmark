@@ -17,16 +17,17 @@ requests in flight, not a fixed request arrival rate.
   exit.
 - `cmd/root.go` defines CLI flags, constructs the benchmark configuration,
   validates it, and coordinates execution and reporting.
-- `cmd/report.go` renders text or JSON configuration and summary data. Sensitive
-  header values are redacted only for display.
+- `cmd/report/report.go` renders text or JSON configuration and summary data.
+  Sensitive header values are redacted only for display.
 - `internal/config/config.go` owns request and benchmark configuration, header
   parsing, and validation.
-- `internal/runner.go` owns the worker pool, channel lifecycle, cancellation, and
-  streaming result collection.
-- `internal/worker.go` owns the HTTP client and execution of one request.
-- `internal/stats.go` aggregates request outcomes and calculates final metrics.
-- `internal/result.go` defines the data exchanged between request execution,
-  aggregation, and reporting.
+- `internal/runner/runner.go` owns the worker pool, channel lifecycle,
+  cancellation, and streaming result collection.
+- `internal/runner/worker.go` owns the HTTP client and execution of one request.
+- `internal/stats/stats.go` aggregates request outcomes and calculates final
+  metrics.
+- `internal/stats/result.go` defines the data exchanged between request
+  execution, aggregation, and reporting.
 
 ## Execution Flow
 
@@ -75,6 +76,9 @@ For `N` total requests and concurrency `C`:
 - At most `C` HTTP requests can be in flight.
 - The job and result channel capacities are bounded by the worker count.
 - A worker handles multiple requests sequentially until the job channel closes.
+
+For example, `-n 1000 -c 10` queues 1,000 request jobs and uses 10 workers to
+process them. Each worker takes another job after its current request finishes.
 
 The producer closes the job channel after producing all jobs. Workers are the
 only result senders. A `sync.WaitGroup` tracks worker completion, and a separate

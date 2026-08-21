@@ -1,4 +1,4 @@
-package cmd
+package report
 
 import (
 	"bytes"
@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal"
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
 )
 
 func TestDisplayHeaderValueRedactsCredentials(t *testing.T) {
@@ -49,14 +49,14 @@ func TestWriteJSONReport(t *testing.T) {
 		TotalRequests: 100,
 		Concurrency:   10,
 	}
-	summary := internal.Summary{
+	summary := stats.Summary{
 		AttemptedRequests:    100,
 		SuccessfulRequests:   90,
 		FailedRequests:       10,
 		ElapsedTime:          2 * time.Second,
 		EstimatedThroughput:  50,
 		SuccessfulThroughput: 45,
-		SuccessfulLatency: internal.LatencyStats{
+		SuccessfulLatency: stats.LatencyStats{
 			Average: 25 * time.Millisecond,
 			Minimum: 10 * time.Millisecond,
 			Maximum: 80 * time.Millisecond,
@@ -70,7 +70,7 @@ func TestWriteJSONReport(t *testing.T) {
 	}
 
 	var output bytes.Buffer
-	if err := writeJSONReport(&output, cfg, summary); err != nil {
+	if err := WriteJSON(&output, cfg, summary); err != nil {
 		t.Fatalf("expected JSON report, got %v", err)
 	}
 	if strings.Contains(output.String(), "private-token") {

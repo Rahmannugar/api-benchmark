@@ -1,4 +1,4 @@
-package internal_test
+package runner_test
 
 import (
 	"context"
@@ -10,8 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal"
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/runner"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
 )
 
 func TestSendRequestCustomMethodAndHeaders(t *testing.T) {
@@ -31,7 +32,7 @@ func TestSendRequestCustomMethodAndHeaders(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := internal.NewHTTPClient(5, 5*time.Second)
+	client := runner.NewHTTPClient(5, 5*time.Second)
 	reqCfg := config.RequestConfig{
 		Method: "POST",
 		URL:    server.URL,
@@ -42,7 +43,7 @@ func TestSendRequestCustomMethodAndHeaders(t *testing.T) {
 		Timeout: 5 * time.Second,
 	}
 
-	result := internal.SendRequest(context.Background(), client, &reqCfg)
+	result := runner.SendRequest(context.Background(), client, &reqCfg)
 	if result.Error != nil {
 		t.Fatalf("expected no error, got %v", result.Error)
 	}
@@ -64,7 +65,7 @@ func TestSendRequestIncludesResponseBodyReadInLatency(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := internal.NewHTTPClient(1, time.Second)
+	client := runner.NewHTTPClient(1, time.Second)
 	defer client.CloseIdleConnections()
 	requestConfig := config.RequestConfig{
 		Method:  http.MethodGet,
@@ -72,7 +73,7 @@ func TestSendRequestIncludesResponseBodyReadInLatency(t *testing.T) {
 		Timeout: time.Second,
 	}
 
-	result := internal.SendRequest(context.Background(), client, &requestConfig)
+	result := runner.SendRequest(context.Background(), client, &requestConfig)
 	if result.Error != nil {
 		t.Fatalf("expected no error, got %v", result.Error)
 	}
@@ -89,7 +90,7 @@ func TestSendRequestReportsTruncatedResponseBody(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := internal.NewHTTPClient(1, time.Second)
+	client := runner.NewHTTPClient(1, time.Second)
 	defer client.CloseIdleConnections()
 	requestConfig := config.RequestConfig{
 		Method:  http.MethodGet,
@@ -97,7 +98,7 @@ func TestSendRequestReportsTruncatedResponseBody(t *testing.T) {
 		Timeout: time.Second,
 	}
 
-	result := internal.SendRequest(context.Background(), client, &requestConfig)
+	result := runner.SendRequest(context.Background(), client, &requestConfig)
 	if !errors.Is(result.Error, io.ErrUnexpectedEOF) {
 		t.Fatalf("expected unexpected EOF, got %v", result.Error)
 	}
@@ -137,7 +138,7 @@ func TestRunBenchmark(t *testing.T) {
 		Concurrency:   10,
 	}
 
-	summary := internal.RunBenchmark(context.Background(), benchCfg)
+	summary := runner.RunBenchmark(context.Background(), benchCfg)
 	if requestCount.Load() != 105 {
 		t.Fatalf("expected server to receive 105 requests, got %d", requestCount.Load())
 	}
@@ -192,9 +193,9 @@ func TestRunBenchmarkCancellation(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan internal.Summary, 1)
+	done := make(chan stats.Summary, 1)
 	go func() {
-		done <- internal.RunBenchmark(ctx, benchCfg)
+		done <- runner.RunBenchmark(ctx, benchCfg)
 	}()
 
 	select {
@@ -204,7 +205,7 @@ func TestRunBenchmarkCancellation(t *testing.T) {
 		t.Fatal("timed out waiting for a request to start")
 	}
 
-	var summary internal.Summary
+	var summary stats.Summary
 	select {
 	case summary = <-done:
 	case <-time.After(time.Second):

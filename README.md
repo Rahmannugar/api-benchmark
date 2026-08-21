@@ -212,19 +212,22 @@ Tests use local `httptest` servers and do not require an external API.
 ```text
 .
 |-- cmd/
-|   |-- report.go
-|   |-- report_test.go
+|   |-- report/
+|   |   |-- report.go
+|   |   `-- report_test.go
 |   `-- root.go
 |-- internal/
 |   |-- config/
 |   |   |-- config.go
 |   |   `-- config_test.go
-|   |-- result.go
-|   |-- runner.go
-|   |-- runner_test.go
-|   |-- stats.go
-|   |-- stats_test.go
-|   `-- worker.go
+|   |-- runner/
+|   |   |-- runner.go
+|   |   |-- runner_test.go
+|   |   `-- worker.go
+|   `-- stats/
+|       |-- result.go
+|       |-- stats.go
+|       `-- stats_test.go
 |-- ARCHITECTURE.md
 |-- README.md
 |-- go.mod

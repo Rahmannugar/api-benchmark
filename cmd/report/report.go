@@ -1,4 +1,4 @@
-package cmd
+package report
 
 import (
 	"encoding/json"
@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal"
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
 )
 
 type jsonReport struct {
@@ -58,7 +58,8 @@ type jsonLatency struct {
 	P99     float64 `json:"p99"`
 }
 
-func printBenchmarkConfiguration(cfg config.BenchmarkConfig) {
+// PrintBenchmarkConfiguration displays the validated text-mode configuration.
+func PrintBenchmarkConfiguration(cfg config.BenchmarkConfig) {
 	fmt.Printf("Benchmark Target: [%s] %s\n", cfg.Request.Method, cfg.Request.URL)
 	fmt.Printf(
 		"Requests: %d | Concurrency: %d | Timeout: %v\n",
@@ -83,8 +84,8 @@ func printBenchmarkConfiguration(cfg config.BenchmarkConfig) {
 	fmt.Println("Running benchmark, please wait...")
 }
 
-// printSummary formats and displays the final benchmark metrics.
-func printSummary(s internal.Summary) {
+// PrintSummary formats and displays the final text benchmark metrics.
+func PrintSummary(s stats.Summary) {
 	fmt.Println("\n==================================")
 	fmt.Println("BENCHMARK SUMMARY")
 	fmt.Println("==================================")
@@ -142,7 +143,8 @@ func printSummary(s internal.Summary) {
 	fmt.Println("==================================")
 }
 
-func writeJSONReport(writer io.Writer, cfg config.BenchmarkConfig, summary internal.Summary) error {
+// WriteJSON writes one machine-readable benchmark report.
+func WriteJSON(writer io.Writer, cfg config.BenchmarkConfig, summary stats.Summary) error {
 	report := jsonReport{
 		Target: jsonTarget{
 			Method: cfg.Request.Method,

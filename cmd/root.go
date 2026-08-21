@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal"
+	"github.com/mbrik/CLI-Benchmarking-Tool/cmd/report"
 	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/runner"
 )
 
 // headerFlags is a custom flag type to allow multiple -H / -header arguments
@@ -77,16 +78,16 @@ func Execute(ctx context.Context) error {
 	}
 
 	if outputFormat == "text" {
-		printBenchmarkConfiguration(benchConfig)
+		report.PrintBenchmarkConfiguration(benchConfig)
 	}
 
-	summary := internal.RunBenchmark(ctx, benchConfig)
+	summary := runner.RunBenchmark(ctx, benchConfig)
 	if outputFormat == "json" {
-		if err := writeJSONReport(os.Stdout, benchConfig, summary); err != nil {
+		if err := report.WriteJSON(os.Stdout, benchConfig, summary); err != nil {
 			return fmt.Errorf("write JSON report: %w", err)
 		}
 	} else {
-		printSummary(summary)
+		report.PrintSummary(summary)
 	}
 	if err := ctx.Err(); err != nil {
 		return fmt.Errorf("benchmark interrupted: %w", err)

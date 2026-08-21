@@ -1,4 +1,4 @@
-package internal_test
+package stats_test
 
 import (
 	"io"
@@ -6,18 +6,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal"
+	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
 )
 
 func TestCalculateStatsWithErrorsAndFailures(t *testing.T) {
-	results := []internal.RequestResult{
+	results := []stats.RequestResult{
 		{Duration: 10 * time.Millisecond, StatusCode: 200},
 		{Duration: 15 * time.Millisecond, StatusCode: 404},
 		{Duration: 20 * time.Millisecond, StatusCode: 500},
 		{Duration: 5 * time.Millisecond, Error: io.ErrUnexpectedEOF},
 	}
 
-	summary := internal.CalculateStats(results, 50*time.Millisecond)
+	summary := stats.CalculateStats(results, 50*time.Millisecond)
 	if summary.AttemptedRequests != 4 {
 		t.Fatalf("expected 4 attempted requests, got %d", summary.AttemptedRequests)
 	}
@@ -41,19 +41,19 @@ func TestCalculateStatsWithErrorsAndFailures(t *testing.T) {
 }
 
 func TestCalculateStatsSuccessfulLatencyPercentiles(t *testing.T) {
-	results := make([]internal.RequestResult, 0, 102)
+	results := make([]stats.RequestResult, 0, 102)
 	for milliseconds := 1; milliseconds <= 100; milliseconds++ {
-		results = append(results, internal.RequestResult{
+		results = append(results, stats.RequestResult{
 			Duration:   time.Duration(milliseconds) * time.Millisecond,
 			StatusCode: 200,
 		})
 	}
 	results = append(results,
-		internal.RequestResult{Duration: time.Microsecond, StatusCode: 429},
-		internal.RequestResult{Duration: time.Microsecond, Error: io.ErrUnexpectedEOF},
+		stats.RequestResult{Duration: time.Microsecond, StatusCode: 429},
+		stats.RequestResult{Duration: time.Microsecond, Error: io.ErrUnexpectedEOF},
 	)
 
-	summary := internal.CalculateStats(results, 2*time.Second)
+	summary := stats.CalculateStats(results, 2*time.Second)
 	latency := summary.SuccessfulLatency
 
 	if summary.AttemptedRequests != 102 || summary.SuccessfulRequests != 100 || summary.FailedRequests != 2 {
@@ -76,13 +76,13 @@ func TestCalculateStatsSuccessfulLatencyPercentiles(t *testing.T) {
 }
 
 func TestCalculateStatsWithoutSuccessfulRequests(t *testing.T) {
-	results := []internal.RequestResult{
+	results := []stats.RequestResult{
 		{Duration: time.Millisecond, StatusCode: 429},
 		{Duration: 2 * time.Millisecond, Error: io.ErrUnexpectedEOF},
 	}
 
-	summary := internal.CalculateStats(results, time.Second)
-	if summary.SuccessfulLatency != (internal.LatencyStats{}) {
+	summary := stats.CalculateStats(results, time.Second)
+	if summary.SuccessfulLatency != (stats.LatencyStats{}) {
 		t.Fatalf("expected no successful latency samples, got %+v", summary.SuccessfulLatency)
 	}
 	if summary.SuccessfulThroughput != 0 {
