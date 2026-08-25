@@ -29,8 +29,8 @@ terminal text or JSON.
 Clone and build the executable:
 
 ```bash
-git clone https://github.com/mbrik/CLI-Benchmarking-Tool.git
-cd CLI-Benchmarking-Tool
+git clone https://github.com/rahmannugar/api-benchmark.git
+cd api-benchmark
 go build -o api-benchmark .
 ```
 
