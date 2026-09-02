@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
+	"github.com/rahmannugar/api-benchmark/internal/config"
+	"github.com/rahmannugar/api-benchmark/internal/stats"
 )
 
 func TestDisplayHeaderValueRedactsCredentials(t *testing.T) {
@@ -47,6 +47,7 @@ func TestWriteJSONReport(t *testing.T) {
 			Timeout: 1500 * time.Millisecond,
 		},
 		TotalRequests:     100,
+		WarmupRequests:    5,
 		Concurrency:       10,
 		RequestsPerSecond: 2.5,
 	}
@@ -63,6 +64,24 @@ func TestWriteJSONReport(t *testing.T) {
 			Maximum: 80 * time.Millisecond,
 			P50:     20 * time.Millisecond,
 			P90:     40 * time.Millisecond,
+			P95:     50 * time.Millisecond,
+			P99:     70 * time.Millisecond,
+		},
+		FailedLatency: stats.LatencyStats{
+			Average: 15 * time.Millisecond,
+			Minimum: 5 * time.Millisecond,
+			Maximum: 30 * time.Millisecond,
+			P50:     12 * time.Millisecond,
+			P90:     25 * time.Millisecond,
+			P95:     28 * time.Millisecond,
+			P99:     30 * time.Millisecond,
+		},
+		AllLatency: stats.LatencyStats{
+			Average: 24 * time.Millisecond,
+			Minimum: 5 * time.Millisecond,
+			Maximum: 80 * time.Millisecond,
+			P50:     19 * time.Millisecond,
+			P90:     39 * time.Millisecond,
 			P95:     50 * time.Millisecond,
 			P99:     70 * time.Millisecond,
 		},
@@ -91,11 +110,17 @@ func TestWriteJSONReport(t *testing.T) {
 	if report.Configuration.MaxRequestsPerSecond != 2.5 {
 		t.Fatalf("expected 2.5 requests per second, got %f", report.Configuration.MaxRequestsPerSecond)
 	}
+	if report.Configuration.WarmupRequests != 5 {
+		t.Fatalf("expected 5 warm-up requests, got %d", report.Configuration.WarmupRequests)
+	}
 	if report.Configuration.Headers["Authorization"] != "[REDACTED]" {
 		t.Fatalf("expected redacted headers, got %+v", report.Configuration.Headers)
 	}
 	if report.Summary.SuccessfulLatencyMS.P99 != 70 {
 		t.Fatalf("expected 70ms P99, got %f", report.Summary.SuccessfulLatencyMS.P99)
+	}
+	if report.Summary.FailedLatencyMS.P50 != 12 || report.Summary.AllLatencyMS.Average != 24 {
+		t.Fatalf("unexpected additional latency metrics: %+v", report.Summary)
 	}
 	if report.Summary.Throughput.SuccessfulRequestsPerSecond != 45 {
 		t.Fatalf("expected 45 successful requests per second, got %f", report.Summary.Throughput.SuccessfulRequestsPerSecond)

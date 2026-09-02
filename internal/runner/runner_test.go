@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/runner"
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
+	"github.com/rahmannugar/api-benchmark/internal/config"
+	"github.com/rahmannugar/api-benchmark/internal/runner"
+	"github.com/rahmannugar/api-benchmark/internal/stats"
 )
 
 func TestSendRequestCustomMethodAndHeaders(t *testing.T) {
@@ -171,6 +171,85 @@ func TestRunBenchmark(t *testing.T) {
 	}
 	if summary.EstimatedThroughput <= 0 || summary.SuccessfulThroughput <= 0 {
 		t.Fatalf("expected positive throughput metrics, got %+v", summary)
+	}
+}
+
+func TestRunBenchmarkExcludesWarmupRequestsFromMetrics(t *testing.T) {
+	const (
+		warmupRequests   = 3
+		measuredRequests = 5
+	)
+
+	var requestCount atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestNumber := requestCount.Add(1)
+		if requestNumber <= warmupRequests {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	benchCfg := config.BenchmarkConfig{
+		Request: config.RequestConfig{
+			Method:  http.MethodGet,
+			URL:     server.URL,
+			Timeout: time.Second,
+		},
+		TotalRequests:  measuredRequests,
+		WarmupRequests: warmupRequests,
+		Concurrency:    2,
+	}
+
+	summary := runner.RunBenchmark(context.Background(), benchCfg)
+	if requestCount.Load() != warmupRequests+measuredRequests {
+		t.Fatalf("expected %d total requests, got %d", warmupRequests+measuredRequests, requestCount.Load())
+	}
+	if summary.AttemptedRequests != measuredRequests ||
+		summary.SuccessfulRequests != measuredRequests ||
+		summary.FailedRequests != 0 {
+		t.Fatalf("expected only measured requests in summary, got %+v", summary)
+	}
+	if summary.StatusCodes[http.StatusOK] != measuredRequests || summary.StatusCodes[http.StatusServiceUnavailable] != 0 {
+		t.Fatalf("expected warm-up statuses to be excluded, got %+v", summary.StatusCodes)
+	}
+	if summary.SuccessfulLatency.Average <= 0 || summary.AllLatency.Average <= 0 {
+		t.Fatalf("expected measured latency samples, got %+v", summary)
+	}
+	if summary.FailedLatency != (stats.LatencyStats{}) {
+		t.Fatalf("expected no measured failed latency, got %+v", summary.FailedLatency)
+	}
+}
+
+func TestRunBenchmarkExcludesWarmupPacingDelayFromElapsedTime(t *testing.T) {
+	const pacingInterval = 200 * time.Millisecond
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	benchCfg := config.BenchmarkConfig{
+		Request: config.RequestConfig{
+			Method:  http.MethodGet,
+			URL:     server.URL,
+			Timeout: time.Second,
+		},
+		TotalRequests:     1,
+		WarmupRequests:    1,
+		Concurrency:       1,
+		RequestsPerSecond: float64(time.Second) / float64(pacingInterval),
+	}
+
+	wallStart := time.Now()
+	summary := runner.RunBenchmark(context.Background(), benchCfg)
+	wallElapsed := time.Since(wallStart)
+	if wallElapsed < pacingInterval {
+		t.Fatalf("expected pacing across warm-up and measurement, got %v", wallElapsed)
+	}
+	if summary.ElapsedTime >= pacingInterval/2 {
+		t.Fatalf("expected warm-up pacing delay outside measured elapsed time, got %v", summary.ElapsedTime)
 	}
 }
 

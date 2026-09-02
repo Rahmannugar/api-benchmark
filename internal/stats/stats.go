@@ -10,6 +10,7 @@ import (
 type Accumulator struct {
 	summary             Summary
 	successfulDurations []time.Duration
+	failedDurations     []time.Duration
 }
 
 // NewAccumulator creates a streaming benchmark stats collector.
@@ -20,6 +21,7 @@ func NewAccumulator(initialCapacity int) *Accumulator {
 			Errors:      make(map[string]int),
 		},
 		successfulDurations: make([]time.Duration, 0, initialCapacity),
+		failedDurations:     make([]time.Duration, 0, initialCapacity),
 	}
 }
 
@@ -35,6 +37,7 @@ func (a *Accumulator) Add(result RequestResult) {
 	}
 	if !isSuccessfulResult(result) {
 		a.summary.FailedRequests++
+		a.failedDurations = append(a.failedDurations, result.Duration)
 		return
 	}
 
@@ -45,7 +48,12 @@ func (a *Accumulator) Add(result RequestResult) {
 // Finalize calculates latency and throughput for the completed run.
 func (a *Accumulator) Finalize(elapsedTime time.Duration) Summary {
 	a.summary.ElapsedTime = elapsedTime
+	allDurations := make([]time.Duration, 0, len(a.successfulDurations)+len(a.failedDurations))
+	allDurations = append(allDurations, a.successfulDurations...)
+	allDurations = append(allDurations, a.failedDurations...)
 	a.summary.SuccessfulLatency = calculateLatencyStats(a.successfulDurations)
+	a.summary.FailedLatency = calculateLatencyStats(a.failedDurations)
+	a.summary.AllLatency = calculateLatencyStats(allDurations)
 
 	if elapsedTime.Seconds() > 0 {
 		a.summary.EstimatedThroughput = float64(a.summary.AttemptedRequests) / elapsedTime.Seconds()

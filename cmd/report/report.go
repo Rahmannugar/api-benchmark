@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
+	"github.com/rahmannugar/api-benchmark/internal/config"
+	"github.com/rahmannugar/api-benchmark/internal/stats"
 )
 
 type jsonReport struct {
@@ -26,6 +26,7 @@ type jsonTarget struct {
 
 type jsonConfiguration struct {
 	TotalRequests        int               `json:"total_requests"`
+	WarmupRequests       int               `json:"warmup_requests"`
 	Concurrency          int               `json:"concurrency"`
 	MaxRequestsPerSecond float64           `json:"max_requests_per_second"`
 	TimeoutSeconds       float64           `json:"timeout_seconds"`
@@ -40,6 +41,8 @@ type jsonSummary struct {
 	FailedRequests      int            `json:"failed_requests"`
 	Throughput          jsonThroughput `json:"throughput"`
 	SuccessfulLatencyMS jsonLatency    `json:"successful_latency_ms"`
+	FailedLatencyMS     jsonLatency    `json:"failed_latency_ms"`
+	AllLatencyMS        jsonLatency    `json:"all_requests_latency_ms"`
 	StatusCodes         map[int]int    `json:"status_codes"`
 	Errors              map[string]int `json:"errors"`
 }
@@ -63,8 +66,9 @@ type jsonLatency struct {
 func PrintBenchmarkConfiguration(cfg config.BenchmarkConfig) {
 	fmt.Printf("Benchmark Target: [%s] %s\n", cfg.Request.Method, cfg.Request.URL)
 	fmt.Printf(
-		"Requests: %d | Concurrency: %d | Rate: %s | Timeout: %v\n",
+		"Requests: %d | Warm-up: %d | Concurrency: %d | Rate: %s | Timeout: %v\n",
 		cfg.TotalRequests,
+		cfg.WarmupRequests,
 		cfg.Concurrency,
 		formatRequestRate(cfg.RequestsPerSecond),
 		cfg.Request.Timeout,
@@ -111,6 +115,8 @@ func PrintSummary(s stats.Summary) {
 		fmt.Printf("Minimum                : %v\n", s.SuccessfulLatency.Minimum)
 		fmt.Printf("Maximum                : %v\n", s.SuccessfulLatency.Maximum)
 	}
+	printLatency("FAILED REQUEST LATENCY", s.FailedRequests, "failed", s.FailedLatency)
+	printLatency("ALL REQUEST LATENCY", s.AttemptedRequests, "measured", s.AllLatency)
 
 	if len(s.StatusCodes) > 0 {
 		fmt.Println("----------------------------------")
@@ -145,6 +151,22 @@ func PrintSummary(s stats.Summary) {
 	fmt.Println("==================================")
 }
 
+func printLatency(title string, requestCount int, requestType string, latency stats.LatencyStats) {
+	fmt.Println("----------------------------------")
+	fmt.Println(title)
+	if requestCount == 0 {
+		fmt.Printf("No %s requests recorded.\n", requestType)
+		return
+	}
+	fmt.Printf("P50                    : %v\n", latency.P50)
+	fmt.Printf("P90                    : %v\n", latency.P90)
+	fmt.Printf("P95                    : %v\n", latency.P95)
+	fmt.Printf("P99                    : %v\n", latency.P99)
+	fmt.Printf("Average                : %v\n", latency.Average)
+	fmt.Printf("Minimum                : %v\n", latency.Minimum)
+	fmt.Printf("Maximum                : %v\n", latency.Maximum)
+}
+
 // WriteJSON writes one machine-readable benchmark report.
 func WriteJSON(writer io.Writer, cfg config.BenchmarkConfig, summary stats.Summary) error {
 	report := jsonReport{
@@ -154,6 +176,7 @@ func WriteJSON(writer io.Writer, cfg config.BenchmarkConfig, summary stats.Summa
 		},
 		Configuration: jsonConfiguration{
 			TotalRequests:        cfg.TotalRequests,
+			WarmupRequests:       cfg.WarmupRequests,
 			Concurrency:          cfg.Concurrency,
 			MaxRequestsPerSecond: cfg.RequestsPerSecond,
 			TimeoutSeconds:       cfg.Request.Timeout.Seconds(),
@@ -178,14 +201,28 @@ func WriteJSON(writer io.Writer, cfg config.BenchmarkConfig, summary stats.Summa
 				P95:     durationMilliseconds(summary.SuccessfulLatency.P95),
 				P99:     durationMilliseconds(summary.SuccessfulLatency.P99),
 			},
-			StatusCodes: summary.StatusCodes,
-			Errors:      summary.Errors,
+			FailedLatencyMS: toJSONLatency(summary.FailedLatency),
+			AllLatencyMS:    toJSONLatency(summary.AllLatency),
+			StatusCodes:     summary.StatusCodes,
+			Errors:          summary.Errors,
 		},
 	}
 
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(report)
+}
+
+func toJSONLatency(latency stats.LatencyStats) jsonLatency {
+	return jsonLatency{
+		Average: durationMilliseconds(latency.Average),
+		Minimum: durationMilliseconds(latency.Minimum),
+		Maximum: durationMilliseconds(latency.Maximum),
+		P50:     durationMilliseconds(latency.P50),
+		P90:     durationMilliseconds(latency.P90),
+		P95:     durationMilliseconds(latency.P95),
+		P99:     durationMilliseconds(latency.P99),
+	}
 }
 
 func displayHeaders(headers map[string]string) map[string]string {

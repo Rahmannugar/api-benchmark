@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
+	"github.com/rahmannugar/api-benchmark/internal/config"
+	"github.com/rahmannugar/api-benchmark/internal/stats"
 )
 
 // NewHTTPClient creates an optimized HTTP client with connection pooling scaled for concurrency

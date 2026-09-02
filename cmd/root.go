@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/cmd/report"
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/runner"
+	"github.com/rahmannugar/api-benchmark/cmd/report"
+	"github.com/rahmannugar/api-benchmark/internal/config"
+	"github.com/rahmannugar/api-benchmark/internal/runner"
 )
 
 // headerFlags is a custom flag type to allow multiple -H / -header arguments
@@ -33,6 +33,9 @@ func Execute(ctx context.Context) error {
 	flag.StringVar(methodFlag, "method", "GET", "HTTP method (alias for -m)")
 
 	requestsFlag := flag.Int("n", 1000, "Total number of requests to perform")
+	warmupFlag := flag.Int("w", 0, "Warm-up requests to perform before measurement")
+	flag.IntVar(warmupFlag, "warmup", 0, "Warm-up requests (alias for -w)")
+	flag.IntVar(warmupFlag, "warm-up", 0, "Warm-up requests (alias for -w)")
 	concurrencyFlag := flag.Int("c", 10, "Number of concurrent workers")
 	rateFlag := flag.Float64("r", 0, "Maximum requests started per second; 0 means unlimited")
 	flag.Float64Var(rateFlag, "rate", 0, "Maximum requests started per second (alias for -r)")
@@ -73,6 +76,7 @@ func Execute(ctx context.Context) error {
 	benchConfig := config.BenchmarkConfig{
 		Request:           reqConfig,
 		TotalRequests:     *requestsFlag,
+		WarmupRequests:    *warmupFlag,
 		Concurrency:       *concurrencyFlag,
 		RequestsPerSecond: *rateFlag,
 	}

@@ -22,6 +22,7 @@ type RequestConfig struct {
 type BenchmarkConfig struct {
 	Request           RequestConfig
 	TotalRequests     int
+	WarmupRequests    int
 	Concurrency       int
 	RequestsPerSecond float64
 }
@@ -49,6 +50,9 @@ func ParseHeaders(values []string) (map[string]string, error) {
 func (c BenchmarkConfig) Validate() error {
 	if c.TotalRequests <= 0 {
 		return fmt.Errorf("total requests must be greater than zero")
+	}
+	if c.WarmupRequests < 0 {
+		return fmt.Errorf("warm-up requests cannot be negative")
 	}
 	if c.Concurrency <= 0 {
 		return fmt.Errorf("concurrency must be greater than zero")

@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/cmd"
+	"github.com/rahmannugar/api-benchmark/cmd"
 )
 
 func main() {

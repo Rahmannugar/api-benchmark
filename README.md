@@ -8,13 +8,15 @@ terminal text or JSON.
 ## Features
 
 - Bounded worker pool with configurable concurrency.
+- Optional warm-up requests excluded from all benchmark metrics.
 - Optional maximum request start rate for paced benchmarks.
 - Support for any valid HTTP method.
 - Repeatable custom headers and optional request bodies.
 - Per-request timeout covering the complete HTTP exchange.
 - Connection pooling and response-body draining for connection reuse.
 - Estimated and successful throughput.
-- Average, minimum, maximum, P50, P90, P95, and P99 successful latency.
+- Average, minimum, maximum, P50, P90, P95, and P99 latency for successful,
+  failed, and all measured requests.
 - HTTP status code and request error distributions.
 - Text output for humans and JSON output for scripts.
 - Sensitive header redaction in displayed configuration.
@@ -56,7 +58,9 @@ api-benchmark [flags]
   -m, -method string
         HTTP method (default "GET")
   -n int
-        Total number of requests (default 1000)
+        Total number of measured requests (default 1000)
+  -w, -warmup, -warm-up int
+        Warm-up requests to perform before measurement (default 0)
   -c int
         Number of concurrent workers (default 10)
   -r, -rate float
@@ -71,8 +75,9 @@ api-benchmark [flags]
         Output format: text or json (default "text")
 ```
 
-Total requests, concurrency, timeout, method, URL, and headers are validated
-before workers start. Concurrency cannot exceed the total request count.
+Total requests, warm-up requests, concurrency, timeout, method, URL, and headers
+are validated before workers start. Concurrency cannot exceed the measured
+request count.
 
 ## Examples
 
@@ -126,6 +131,7 @@ Example output:
   },
   "configuration": {
     "total_requests": 100,
+    "warmup_requests": 0,
     "concurrency": 10,
     "max_requests_per_second": 0,
     "timeout_seconds": 10,
@@ -142,6 +148,24 @@ Example output:
       "successful_requests_per_second": 425.1
     },
     "successful_latency_ms": {
+      "average": 22.939466,
+      "minimum": 4.723625,
+      "maximum": 114.392625,
+      "p50": 18.412,
+      "p90": 43.806,
+      "p95": 57.114,
+      "p99": 92.731
+    },
+    "failed_latency_ms": {
+      "average": 0,
+      "minimum": 0,
+      "maximum": 0,
+      "p50": 0,
+      "p90": 0,
+      "p95": 0,
+      "p99": 0
+    },
+    "all_requests_latency_ms": {
       "average": 22.939466,
       "minimum": 4.723625,
       "maximum": 114.392625,
@@ -182,11 +206,30 @@ Pacing does not bypass a target's rate limiter. It helps keep a benchmark below
 a known limit so successful endpoint behavior can be measured without producing
 mostly `429 Too Many Requests` responses.
 
+### Warm up a sleeping service
+
+Send five requests to wake and initialize the target before measuring 100
+requests:
+
+```bash
+./api-benchmark \
+  -url "https://example.onrender.com/api/items" \
+  -warm-up 5 \
+  -n 100 \
+  -c 10
+```
+
+Warm-up requests finish before measured requests begin. They use the same
+request configuration, concurrency, HTTP client, connection pool, and rate
+limit, but are excluded from elapsed time, request counts, throughput, latency,
+status codes, and errors. `-n` always means the number of measured requests, so
+this example sends 105 requests in total.
+
 ## Text Output
 
 ```text
 Benchmark Target: [GET] http://localhost:8080/api/items
-Requests: 100 | Concurrency: 10 | Rate: unlimited | Timeout: 10s
+Requests: 100 | Warm-up: 0 | Concurrency: 10 | Rate: unlimited | Timeout: 10s
 Running benchmark, please wait...
 
 ==================================
@@ -200,6 +243,18 @@ Estimated Throughput  : 425.10 req/sec
 Successful Throughput : 425.10 req/sec
 ----------------------------------
 SUCCESSFUL REQUEST LATENCY
+P50                    : 18.412ms
+P90                    : 43.806ms
+P95                    : 57.114ms
+P99                    : 92.731ms
+Average                : 22.939466ms
+Minimum                : 4.723625ms
+Maximum                : 114.392625ms
+----------------------------------
+FAILED REQUEST LATENCY
+No failed requests recorded.
+----------------------------------
+ALL REQUEST LATENCY
 P50                    : 18.412ms
 P90                    : 43.806ms
 P95                    : 57.114ms
@@ -230,6 +285,24 @@ Successful Throughput : 0.00 req/sec
 SUCCESSFUL REQUEST LATENCY
 No successful requests recorded.
 ----------------------------------
+FAILED REQUEST LATENCY
+P50                    : 1.08ms
+P90                    : 2.41ms
+P95                    : 2.41ms
+P99                    : 2.41ms
+Average                : 1.19ms
+Minimum                : 620us
+Maximum                : 2.41ms
+----------------------------------
+ALL REQUEST LATENCY
+P50                    : 1.08ms
+P90                    : 2.41ms
+P95                    : 2.41ms
+P99                    : 2.41ms
+Average                : 1.19ms
+Minimum                : 620us
+Maximum                : 2.41ms
+----------------------------------
 ERROR BREAKDOWN
    - Get "http://localhost:8080/api/items": dial tcp 127.0.0.1:8080: connect: connection refused: 10 occurrences
 ==================================
@@ -253,13 +326,18 @@ returned a response.
   the actual request rate lower than this limit.
 - **Latency** starts before the HTTP exchange and ends after the complete response
   body has been read and closed.
-- **Latency statistics** use successful requests only. Percentiles use the exact
-  nearest-rank method.
+- **Successful latency** uses successful request durations, **failed latency**
+  uses failed request durations, and **all-request latency** combines both.
+  Percentiles use the exact nearest-rank method.
+- **Warm-up requests** complete before measurement and are excluded from every
+  metric and distribution. The configured request rate still applies across the
+  warm-up and measured phases.
 
 A `429 Too Many Requests` response is therefore a failed request. It contributes
 to estimated throughput and status distribution, but not successful throughput or
-successful latency percentiles. The benchmark reports the target's rate limiting;
-it does not bypass it.
+successful latency percentiles. Its duration is included in failed and
+all-request latency. The benchmark reports the target's rate limiting; it does
+not bypass it.
 
 ## Concurrency And Memory
 
@@ -269,7 +347,7 @@ are in flight.
 
 Job and result channel memory scales with concurrency. Request counts, status
 codes, and errors are aggregated as results arrive instead of retaining every
-full result. Exact percentiles still require one stored duration per successful
+full result. Exact percentiles still require one stored duration per measured
 request.
 
 The worker model is closed-loop: a worker starts its next request after its

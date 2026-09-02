@@ -9,7 +9,7 @@ type RequestResult struct {
 	StatusCode int
 }
 
-// LatencyStats describes the latency distribution for successful requests.
+// LatencyStats describes a request latency distribution.
 type LatencyStats struct {
 	Average time.Duration
 	Minimum time.Duration
@@ -29,6 +29,8 @@ type Summary struct {
 	EstimatedThroughput  float64
 	SuccessfulThroughput float64
 	SuccessfulLatency    LatencyStats
+	FailedLatency        LatencyStats
+	AllLatency           LatencyStats
 	StatusCodes          map[int]int
 	Errors               map[string]int
 }

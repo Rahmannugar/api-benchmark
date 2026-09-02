@@ -56,15 +56,16 @@ Bounded job channel --> worker goroutines --> bounded result channel
    request header map.
 3. `BenchmarkConfig.Validate` rejects invalid request counts, concurrency,
    methods, URLs, headers, and timeouts before workers start.
-4. `RunBenchmark` creates one HTTP client and a worker pool sized to the smaller
-   of concurrency and total requests.
-5. A producer goroutine sends request jobs until the configured total is reached
+4. `RunBenchmark` creates one HTTP client. When configured, it runs a complete
+   warm-up phase using that client before starting the measurement clock.
+5. Each phase creates a worker pool sized to the smaller of concurrency and its
+   request count. A producer goroutine sends jobs until the phase total is reached
    or the context is cancelled. When a request rate is configured, it spaces job
    handoffs globally across the worker pool.
 6. Each worker processes one job at a time through `SendRequest`, then takes the
    next available job.
-7. Completed request results are aggregated as they arrive. Full request results
-   are not retained after aggregation.
+7. Warm-up results are drained and discarded. Measured results are aggregated as
+   they arrive. Full request results are not retained after aggregation.
 8. Once all workers exit, the result channel closes and the accumulator produces
    the final summary.
 9. The CLI prints the summary as terminal text or one JSON object. An interrupted
@@ -117,15 +118,16 @@ is in the `200-399` range. All other attempted requests are failures.
 - **Elapsed time** is wall-clock benchmark execution time.
 - **Estimated throughput** is attempted requests divided by elapsed seconds.
 - **Successful throughput** is successful requests divided by elapsed seconds.
-- **Average latency** is the arithmetic mean of successful request durations.
-- **Minimum and maximum latency** are the fastest and slowest successful request.
-- **P50, P90, P95, and P99** use the nearest-rank method over sorted successful
-  request durations.
+- **Successful, failed, and all-request latency** each report average, minimum,
+  maximum, P50, P90, P95, and P99 over their respective measured durations.
 
-Failed request durations are excluded from latency statistics so fast failures,
-such as rate-limit responses, do not make successful endpoint latency appear
-better than it was. Status codes and transport errors are still counted in their
-respective distributions.
+Separate distributions prevent fast failures, such as rate-limit responses, from
+making successful endpoint latency appear better while still exposing failure
+latency and the complete traffic profile.
+
+Warm-up requests use the same request configuration, HTTP client, connection
+pool, concurrency, and global start-rate pacing. They complete before measurement
+begins and are excluded from elapsed time and every reported metric.
 
 ## Memory Model
 
@@ -133,9 +135,9 @@ Channel and worker memory scale with concurrency rather than total requests. The
 runner aggregates counts, status codes, and errors immediately and does not keep
 a complete `RequestResult` slice.
 
-Exact percentiles require retaining each successful request duration until the
-run completes. Latency storage is therefore `O(S)`, where `S` is the number of
-successful requests, and percentile calculation sorts those durations in place.
+Exact percentiles require retaining each measured request duration until the run
+completes. Latency storage is therefore `O(N)`, and percentile calculation sorts
+successful, failed, and combined duration slices in place.
 Replacing this with fixed memory would require approximate histogram or streaming
 quantile semantics.
 

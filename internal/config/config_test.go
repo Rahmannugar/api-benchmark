@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/config"
+	"github.com/rahmannugar/api-benchmark/internal/config"
 )
 
 func TestParseHeaders(t *testing.T) {
@@ -75,6 +75,13 @@ func TestBenchmarkConfigValidate(t *testing.T) {
 				cfg.TotalRequests = 0
 			},
 			wantErrText: "total requests",
+		},
+		{
+			name: "warm-up requests cannot be negative",
+			configure: func(cfg *config.BenchmarkConfig) {
+				cfg.WarmupRequests = -1
+			},
+			wantErrText: "warm-up requests cannot be negative",
 		},
 		{
 			name: "concurrency must be positive",

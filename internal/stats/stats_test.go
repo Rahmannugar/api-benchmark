@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mbrik/CLI-Benchmarking-Tool/internal/stats"
+	"github.com/rahmannugar/api-benchmark/internal/stats"
 )
 
 func TestCalculateStatsWithErrorsAndFailures(t *testing.T) {
@@ -35,6 +35,16 @@ func TestCalculateStatsWithErrorsAndFailures(t *testing.T) {
 	}
 	if summary.SuccessfulLatency.Average != 10*time.Millisecond {
 		t.Fatalf("unexpected successful latency: %+v", summary.SuccessfulLatency)
+	}
+	if summary.FailedLatency.Minimum != 5*time.Millisecond ||
+		summary.FailedLatency.Maximum != 20*time.Millisecond ||
+		summary.FailedLatency.P50 != 15*time.Millisecond {
+		t.Fatalf("unexpected failed latency: %+v", summary.FailedLatency)
+	}
+	if summary.AllLatency.Average != 12*time.Millisecond+500*time.Microsecond ||
+		summary.AllLatency.Minimum != 5*time.Millisecond ||
+		summary.AllLatency.Maximum != 20*time.Millisecond {
+		t.Fatalf("unexpected all-request latency: %+v", summary.AllLatency)
 	}
 	assertFloatEqual(t, summary.EstimatedThroughput, 80)
 	assertFloatEqual(t, summary.SuccessfulThroughput, 20)
@@ -84,6 +94,12 @@ func TestCalculateStatsWithoutSuccessfulRequests(t *testing.T) {
 	summary := stats.CalculateStats(results, time.Second)
 	if summary.SuccessfulLatency != (stats.LatencyStats{}) {
 		t.Fatalf("expected no successful latency samples, got %+v", summary.SuccessfulLatency)
+	}
+	if summary.FailedLatency.Minimum != time.Millisecond || summary.FailedLatency.Maximum != 2*time.Millisecond {
+		t.Fatalf("unexpected failed latency samples: %+v", summary.FailedLatency)
+	}
+	if summary.AllLatency != summary.FailedLatency {
+		t.Fatalf("expected all-request and failed latency to match, got all=%+v failed=%+v", summary.AllLatency, summary.FailedLatency)
 	}
 	if summary.SuccessfulThroughput != 0 {
 		t.Fatalf("expected zero successful throughput, got %f", summary.SuccessfulThroughput)
