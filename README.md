@@ -59,9 +59,11 @@ api-benchmark [flags]
         HTTP method (default "GET")
   -n int
         Total number of measured requests (default 1000)
+  -requests int
+        Total measured requests (alias for -n)
   -w, -warmup, -warm-up int
         Warm-up requests to perform before measurement (default 0)
-  -c int
+  -c, -concurrency int
         Number of concurrent workers (default 10)
   -r, -rate float
         Maximum requests started per second; 0 means unlimited (default 0)
@@ -73,7 +75,13 @@ api-benchmark [flags]
         Per-request timeout (default 10s)
   -format string
         Output format: text or json (default "text")
+  -h, -help
+        Show command-line help
 ```
+
+Flag names are case-sensitive. `-H` adds a request header, while lowercase `-h`
+shows help. Long aliases such as `--header`, `--warm-up`, and `--requests` are
+also accepted; Go command-line flags allow either one or two leading dashes.
 
 Total requests, warm-up requests, concurrency, timeout, method, URL, and headers
 are validated before workers start. Concurrency cannot exceed the measured
