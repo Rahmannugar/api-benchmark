@@ -8,7 +8,8 @@ terminal text or JSON.
 ## Features
 
 - Bounded worker pool with configurable concurrency.
-- Optional warm-up requests excluded from all benchmark metrics.
+- Optional warm-up requests wake sleeping, serverless, or scale-to-zero services
+  before measurement so cold-start latency is excluded from the results.
 - Optional maximum request start rate for paced benchmarks.
 - Support for any valid HTTP method.
 - Repeatable custom headers and optional request bodies.
