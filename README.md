@@ -89,6 +89,42 @@ request count.
 
 ## Examples
 
+### Try the benchmark locally
+
+The repository includes a small example server so you can see successful,
+failed, and warm-up requests without using a real API. The server provides:
+
+- `GET /health`, which always returns `200 OK`.
+- `GET /benchmark`, which simulates realistic response behavior.
+- A 750ms cold-start delay for the first three benchmark requests.
+- A `500 Internal Server Error` after 100ms for every fourth request after the
+  cold-start requests.
+- A `200 OK` response after 20ms for the remaining requests.
+
+Start the example server in one terminal:
+
+```bash
+go run ./examples/test-server
+```
+
+Leave that terminal running. It prints each request and response status. In a
+second terminal, run the benchmark:
+
+```bash
+./api-benchmark \
+  --url "http://localhost:8080/benchmark" \
+  --warm-up 3 \
+  --requests 20 \
+  --concurrency 4
+```
+
+The three slow cold-start requests run first and are excluded from the report.
+The 20 measured requests should contain 15 successful responses and five failed
+responses. The report shows latency for successful requests, failed requests,
+and all measured requests. Small timing differences are normal.
+
+Press `Ctrl+C` in the server terminal when you are finished.
+
 ### GET endpoint
 
 Run 2,000 total requests using 20 concurrent workers:
@@ -386,6 +422,9 @@ Tests use local `httptest` servers and do not require an external API.
 
 ```text
 .
+|-- examples/
+|   `-- test-server/
+|       `-- main.go
 |-- cmd/
 |   |-- report/
 |   |   |-- report.go
